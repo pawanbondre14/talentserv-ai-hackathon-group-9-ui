@@ -17,6 +17,7 @@ import { MeetingOutputEditor } from '@/components/output/MeetingOutputEditor'
 import { useApi } from '@/hooks/useApi'
 import {
   fetchSessionFull,
+  getApiErrorMessage,
   processSession,
   updateSessionOutput,
   type SessionWithOutput,
@@ -141,12 +142,13 @@ export function SessionDetail() {
         setOutput((raw as unknown as MeetingMinutesOutput) || emptyMeeting())
       }
     } catch (err: unknown) {
-      const detail =
-        err && typeof err === 'object' && 'response' in err
-          ? (err as { response?: { data?: { detail?: string } } }).response?.data?.detail
-          : null
       setAiStatus('error')
-      setError(detail ? String(detail) : 'Processing failed. Check API keys or set LLM_MOCK=true.')
+      setError(
+        getApiErrorMessage(
+          err,
+          'Processing failed. Check API keys or set LLM_MOCK=true.',
+        ),
+      )
     } finally {
       setProcessing(false)
     }

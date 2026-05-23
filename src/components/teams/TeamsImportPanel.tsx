@@ -9,6 +9,7 @@ import {
   fetchTeamsTranscripts,
   getMicrosoftAuthUrl,
   getMicrosoftStatus,
+  getApiErrorMessage,
   importTeamsTranscript,
   processSession,
   type TeamsTranscriptListItem,
@@ -76,11 +77,9 @@ export function TeamsImportPanel({
       const { url } = await getMicrosoftAuthUrl(api)
       window.location.href = url
     } catch (err: unknown) {
-      const detail =
-        err && typeof err === 'object' && 'response' in err
-          ? (err as { response?: { data?: { detail?: string } } }).response?.data?.detail
-          : null
-      setError(detail ? String(detail) : 'Connect is not available. Use demo meetings below.')
+      setError(
+        getApiErrorMessage(err, 'Connect is not available. Use demo meetings below.'),
+      )
     }
   }
 
@@ -112,11 +111,7 @@ export function TeamsImportPanel({
       }
       navigate(`/session/${session.id}`)
     } catch (err: unknown) {
-      const detail =
-        err && typeof err === 'object' && 'response' in err
-          ? (err as { response?: { data?: { detail?: string } } }).response?.data?.detail
-          : null
-      setError(detail ? String(detail) : 'Import failed.')
+      setError(getApiErrorMessage(err, 'Import failed.'))
     } finally {
       setImportingId(null)
     }

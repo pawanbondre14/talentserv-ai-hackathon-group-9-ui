@@ -3,7 +3,12 @@ import { Link } from 'react-router-dom'
 import { Calendar, FileCheck, Search, Trash2, Users } from 'lucide-react'
 import { Card } from '@/components/ui/Card'
 import { useApi } from '@/hooks/useApi'
-import { deleteSession, fetchSessions, type SessionListItem } from '@/lib/api'
+import {
+  deleteSession,
+  fetchSessions,
+  getApiErrorMessage,
+  type SessionListItem,
+} from '@/lib/api'
 import { cn } from '@/lib/utils'
 
 const PAGE_SIZE = 15
@@ -52,13 +57,7 @@ export function History() {
         setTotal(data.total)
         setItems((prev) => (append ? [...prev, ...data.items] : data.items))
       } catch (err: unknown) {
-        let message = 'Could not load sessions.'
-        if (err && typeof err === 'object' && 'response' in err) {
-          const res = (err as { response?: { status?: number; data?: { detail?: string } } })
-            .response
-          if (res?.data?.detail) message = String(res.data.detail)
-        }
-        setError(message)
+        setError(getApiErrorMessage(err, 'Could not load sessions.'))
       } finally {
         setLoading(false)
         setLoadingMore(false)

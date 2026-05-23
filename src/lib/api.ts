@@ -1,8 +1,47 @@
-import axios, { type AxiosInstance } from 'axios'
+import axios, {
+  type AxiosInstance,
+  type InternalAxiosRequestConfig,
+} from 'axios'
 
 const baseURL = import.meta.env.VITE_API_URL ?? 'http://localhost:8000'
 
-export function createApiClient(getToken: () => Promise<string | null>): AxiosInstance {
+export type GetTokenFn = (options?: { skipCache?: boolean }) => Promise<string | null>
+
+type RetryableConfig = InternalAxiosRequestConfig & { _authRetry?: boolean }
+
+let unauthorizedHandled = false
+
+/** User-facing message; avoids leaking raw backend auth strings in the UI. */
+export function getApiErrorMessage(err: unknown, fallback: string): string {
+  if (isSessionExpiredError(err)) {
+    return 'Your session expired. Please sign in again.'
+  }
+  if (err && typeof err === 'object' && 'response' in err) {
+    const status = (err as { response?: { status?: number } }).response?.status
+    if (status === 401) {
+      return 'Your session expired. Please sign in again.'
+    }
+    const detail = (err as { response?: { data?: { detail?: string } } }).response?.data
+      ?.detail
+    if (detail) return String(detail)
+  }
+  return fallback
+}
+
+export function isSessionExpiredError(err: unknown): boolean {
+  return err instanceof Error && err.name === 'SessionExpiredError'
+}
+
+function sessionExpiredError(): Error {
+  const err = new Error('Session expired')
+  err.name = 'SessionExpiredError'
+  return err
+}
+
+export function createApiClient(
+  getToken: GetTokenFn,
+  onUnauthorized?: () => void,
+): AxiosInstance {
   const client = axios.create({
     baseURL,
     headers: { 'Content-Type': 'application/json' },
@@ -15,6 +54,38 @@ export function createApiClient(getToken: () => Promise<string | null>): AxiosIn
     }
     return config
   })
+
+  client.interceptors.response.use(
+    (response) => {
+      unauthorizedHandled = false
+      return response
+    },
+    async (error: unknown) => {
+      if (!axios.isAxiosError(error) || !error.config) {
+        return Promise.reject(error)
+      }
+
+      const status = error.response?.status
+      const config = error.config as RetryableConfig
+
+      if (status === 401 && !config._authRetry) {
+        config._authRetry = true
+        const token = await getToken({ skipCache: true })
+        if (token) {
+          config.headers.Authorization = `Bearer ${token}`
+          return client.request(config)
+        }
+
+        if (!unauthorizedHandled) {
+          unauthorizedHandled = true
+          onUnauthorized?.()
+        }
+        return Promise.reject(sessionExpiredError())
+      }
+
+      return Promise.reject(error)
+    },
+  )
 
   return client
 }

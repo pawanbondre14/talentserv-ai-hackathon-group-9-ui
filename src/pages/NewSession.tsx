@@ -5,7 +5,12 @@ import { AiStatusPanel, saveAiMeta, type AiRunStatus } from '@/components/output
 import { TeamsImportPanel } from '@/components/teams/TeamsImportPanel'
 import { Card } from '@/components/ui/Card'
 import { useApi } from '@/hooks/useApi'
-import { createSession, processSession, uploadTranscriptFile } from '@/lib/api'
+import {
+  createSession,
+  getApiErrorMessage,
+  processSession,
+  uploadTranscriptFile,
+} from '@/lib/api'
 import { cn } from '@/lib/utils'
 
 type InputTab = 'paste' | 'upload' | 'teams'
@@ -45,12 +50,8 @@ export function NewSession() {
       }
       navigate(`/session/${session.id}`)
     } catch (err: unknown) {
-      const message =
-        err && typeof err === 'object' && 'response' in err
-          ? String((err as { response?: { data?: { detail?: string } } }).response?.data?.detail)
-          : 'Upload failed.'
       setAiStatus('error')
-      setError(message)
+      setError(getApiErrorMessage(err, 'Upload failed.'))
     } finally {
       setLoading(false)
       e.target.value = ''
@@ -80,12 +81,13 @@ export function NewSession() {
       }
       navigate(`/session/${session.id}`)
     } catch (err: unknown) {
-      const message =
-        err && typeof err === 'object' && 'response' in err
-          ? String((err as { response?: { data?: { detail?: string } } }).response?.data?.detail)
-          : 'Failed to create session. Check API and database connection.'
       setAiStatus('error')
-      setError(message)
+      setError(
+        getApiErrorMessage(
+          err,
+          'Failed to create session. Check API and database connection.',
+        ),
+      )
     } finally {
       setLoading(false)
     }
