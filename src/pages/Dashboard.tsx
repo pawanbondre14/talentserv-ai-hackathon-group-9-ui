@@ -69,7 +69,7 @@ export function Dashboard() {
         <Card>
           <Briefcase className="h-5 w-5 text-indigo-400" />
           <p className="mt-3 text-sm font-medium text-white">Teams / OneDrive</p>
-          <p className="mt-1 text-xs text-slate-400">Coming Phase 4 — Azure AD ready</p>
+          <p className="mt-1 text-xs text-slate-400">Import from Recordings folder or demo data</p>
         </Card>
         <Card>
           <MessageSquare className="h-5 w-5 text-indigo-400" />

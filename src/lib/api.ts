@@ -113,6 +113,61 @@ export async function processSession(client: AxiosInstance, sessionId: string) {
   return data
 }
 
+export interface TeamsTranscriptListItem {
+  id: string
+  title: string
+  date: string
+  source: string
+  file_name: string | null
+}
+
+export interface TeamsTranscriptListResponse {
+  items: TeamsTranscriptListItem[]
+  integration_mode: string
+  microsoft_connected: boolean
+}
+
+export interface MicrosoftStatus {
+  connected: boolean
+  integration_mode: string
+  azure_configured: boolean
+}
+
+export async function getMicrosoftStatus(client: AxiosInstance) {
+  const { data } = await client.get<MicrosoftStatus>('/api/microsoft/status')
+  return data
+}
+
+export async function getMicrosoftAuthUrl(client: AxiosInstance) {
+  const { data } = await client.get<{ url: string }>('/api/microsoft/auth-url')
+  return data
+}
+
+export async function disconnectMicrosoft(client: AxiosInstance) {
+  await client.post('/api/microsoft/disconnect')
+}
+
+export async function fetchTeamsTranscripts(client: AxiosInstance) {
+  const { data } = await client.get<TeamsTranscriptListResponse>('/api/teams/transcripts')
+  return data
+}
+
+export async function importTeamsTranscript(
+  client: AxiosInstance,
+  body: {
+    meeting_id: string
+    source: 'mock' | 'onedrive'
+    mode: 'meeting' | 'interview'
+    title?: string
+  },
+) {
+  const { data } = await client.post<{ session: SessionDetail; word_count: number }>(
+    '/api/teams/import',
+    body,
+  )
+  return data
+}
+
 export async function updateSessionOutput(
   client: AxiosInstance,
   sessionId: string,

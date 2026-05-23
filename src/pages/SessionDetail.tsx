@@ -115,6 +115,8 @@ export function SessionDetail() {
 
   useDraftBackup(id, output, Boolean(hasOutput && output))
 
+  const titleDisplay = useMemo(() => session?.title ?? '', [session?.title])
+
   async function handleProcess() {
     if (!id) return
     setProcessing(true)
@@ -179,8 +181,6 @@ export function SessionDetail() {
   if (!session) {
     return <p className="text-slate-500">Loading session…</p>
   }
-
-  const titleDisplay = useMemo(() => session?.title ?? '', [session?.title])
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">
