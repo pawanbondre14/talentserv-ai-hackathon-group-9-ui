@@ -9,7 +9,7 @@ export function SignUpPage() {
           <Sparkles className="h-7 w-7 text-white" />
         </div>
         <h1 className="text-2xl font-bold text-white">Create account</h1>
-        <p className="mt-2 text-sm text-slate-400">MeetingFeed AI</p>
+        <p className="mt-2 text-sm text-slate-400">MeetPilot AI</p>
       </div>
       <SignUp routing="path" path="/sign-up" signInUrl="/sign-in" />
     </div>

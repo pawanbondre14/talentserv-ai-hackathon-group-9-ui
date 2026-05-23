@@ -3,10 +3,6 @@ import { jsPDF } from 'jspdf'
 import { saveAs } from 'file-saver'
 import type { InterviewFeedbackOutput, MeetingMinutesOutput } from '@/lib/types'
 
-function lines(...parts: string[]) {
-  return parts.filter(Boolean).join('\n')
-}
-
 export function meetingToMarkdown(data: MeetingMinutesOutput, title: string): string {
   const sections = [
     `# ${title}`,
@@ -47,7 +43,7 @@ export function meetingToMarkdown(data: MeetingMinutesOutput, title: string): st
 
 export function interviewToMarkdown(data: InterviewFeedbackOutput, title: string): string {
   const sk = data.skill_observations || ({} as InterviewFeedbackOutput['skill_observations'])
-  return lines(
+  const sections = [
     `# ${title}`,
     '',
     '## Candidate summary',
@@ -75,7 +71,41 @@ export function interviewToMarkdown(data: InterviewFeedbackOutput, title: string
     ...(data.follow_up_questions?.length
       ? data.follow_up_questions.map((q) => `- ${q}`)
       : ['_None identified_']),
-  )
+  ]
+
+  if (data.jd_analysis) {
+    const jd = data.jd_analysis
+    sections.push(
+      '',
+      '## JD fit',
+      `Score: ${jd.overall_fit_score}/10`,
+      jd.summary || '',
+      '',
+      '### Matched requirements',
+      ...(jd.matched_requirements?.length
+        ? jd.matched_requirements.map((m) => `- ${m}`)
+        : ['_None_']),
+      '',
+      '### Gaps',
+      ...(jd.gaps?.length ? jd.gaps.map((g) => `- ${g}`) : ['_None_']),
+    )
+  }
+
+  if (data.scorecard_scores?.length) {
+    sections.push('', '## Scorecard')
+    for (const s of data.scorecard_scores) {
+      sections.push(`- ${s.criterion}: ${s.score}/5 — ${s.notes || ''}`)
+    }
+  }
+
+  if (data.qa_pairs?.length) {
+    sections.push('', '## Q&A')
+    for (const q of data.qa_pairs) {
+      sections.push(`**Q:** ${q.question}`, `**A:** ${q.answer}`, '')
+    }
+  }
+
+  return sections.join('\n')
 }
 
 export async function copyMarkdown(md: string) {

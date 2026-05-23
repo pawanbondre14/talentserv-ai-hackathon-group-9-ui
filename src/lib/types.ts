@@ -33,6 +33,26 @@ export interface SkillObservations {
   culture_fit: string
 }
 
+export interface QaPair {
+  question: string
+  answer: string
+  notes: string
+}
+
+export interface ScorecardScore {
+  criterion: string
+  criterion_id?: string
+  score: number
+  notes?: string
+}
+
+export interface JdAnalysis {
+  overall_fit_score: number
+  matched_requirements: string[]
+  gaps: string[]
+  summary: string
+}
+
 export interface InterviewFeedbackOutput {
   candidate_summary: string
   skill_observations: SkillObservations
@@ -42,6 +62,18 @@ export interface InterviewFeedbackOutput {
   rating: 'Proceed' | 'Hold' | 'Reject'
   rationale: string
   follow_up_questions: string[]
+  qa_pairs?: QaPair[]
+  scorecard_scores?: ScorecardScore[]
+  jd_analysis?: JdAnalysis
+  panel_notes?: string
+}
+
+export interface InterviewMeta {
+  jd_text: string | null
+  scorecard_id: string | null
+  blind_mode: boolean
+  candidate_name: string | null
+  candidate_email: string | null
 }
 
 export interface OutputRecord {
@@ -65,4 +97,5 @@ export interface SessionWithOutput {
   transcript_text: string | null
   teams_meeting_id: string | null
   output: OutputRecord | null
+  interview_meta?: InterviewMeta | null
 }

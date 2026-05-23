@@ -1,6 +1,6 @@
-# MeetingFeed AI — Frontend
+# MeetPilot AI — Frontend
 
-React + Vite UI for **Meeting Feed Generator AI**.
+React + Vite UI for **Turn talk into action with AI AI**.
 
 ## Phase 1
 

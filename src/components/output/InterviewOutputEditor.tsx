@@ -1,4 +1,5 @@
-import type { InterviewFeedbackOutput } from '@/lib/types'
+import { ScorecardChart } from '@/components/interview/ScorecardChart'
+import type { InterviewFeedbackOutput, QaPair } from '@/lib/types'
 import { Card } from '@/components/ui/Card'
 
 const RATINGS = ['Proceed', 'Hold', 'Reject'] as const
@@ -17,6 +18,8 @@ export function InterviewOutputEditor({
     problem_solving: '',
     culture_fit: '',
   }
+  const qa = data.qa_pairs?.length ? data.qa_pairs : []
+  const jd = data.jd_analysis
 
   return (
     <div className="space-y-6">
@@ -48,7 +51,50 @@ export function InterviewOutputEditor({
           rows={2}
           className="mt-1 w-full rounded-lg border border-[var(--color-surface-border)] bg-black/30 px-3 py-2 text-sm text-white"
         />
+        {data.panel_notes && (
+          <p className="mt-3 rounded-lg bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+            Panel: {data.panel_notes}
+          </p>
+        )}
       </Card>
+
+      {jd && (
+        <Card className="border-indigo-500/30">
+          <h3 className="text-sm font-semibold text-white">JD fit analysis</h3>
+          <p className="mt-2 text-2xl font-bold text-indigo-300">
+            {jd.overall_fit_score}
+            <span className="text-sm font-normal text-slate-400"> / 10</span>
+          </p>
+          <p className="mt-2 text-sm text-slate-300">{jd.summary}</p>
+          <div className="mt-4 grid gap-4 md:grid-cols-2">
+            <div>
+              <h4 className="text-xs font-medium uppercase text-emerald-400">Matched</h4>
+              <ul className="mt-1 list-inside list-disc text-sm text-slate-300">
+                {(jd.matched_requirements ?? []).map((m, i) => (
+                  <li key={i}>{m}</li>
+                ))}
+              </ul>
+            </div>
+            <div>
+              <h4 className="text-xs font-medium uppercase text-amber-400">Gaps</h4>
+              <ul className="mt-1 list-inside list-disc text-sm text-slate-300">
+                {(jd.gaps ?? []).map((g, i) => (
+                  <li key={i}>{g}</li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        </Card>
+      )}
+
+      {data.scorecard_scores && data.scorecard_scores.length > 0 && (
+        <Card>
+          <h3 className="text-sm font-semibold text-white">Role scorecard</h3>
+          <div className="mt-4">
+            <ScorecardChart scores={data.scorecard_scores} />
+          </div>
+        </Card>
+      )}
 
       <Card>
         <h3 className="text-sm font-semibold text-white">Skill observations</h3>
@@ -78,6 +124,8 @@ export function InterviewOutputEditor({
         </div>
       </Card>
 
+      <QaPairsCard pairs={qa} onChange={(qa_pairs) => update({ qa_pairs })} />
+
       <StringListCard title="Strengths" items={data.strengths} onChange={(strengths) => update({ strengths })} />
       <StringListCard title="Concerns" items={data.concerns} onChange={(concerns) => update({ concerns })} />
 
@@ -97,6 +145,55 @@ export function InterviewOutputEditor({
         onChange={(follow_up_questions) => update({ follow_up_questions })}
       />
     </div>
+  )
+}
+
+function QaPairsCard({
+  pairs,
+  onChange,
+}: {
+  pairs: QaPair[]
+  onChange: (pairs: QaPair[]) => void
+}) {
+  if (!pairs.length) {
+    return (
+      <Card>
+        <h3 className="text-sm font-semibold text-white">Q ↔ A mapping</h3>
+        <p className="mt-2 text-sm text-slate-500">No Q&A pairs identified</p>
+      </Card>
+    )
+  }
+  return (
+    <Card>
+      <h3 className="text-sm font-semibold text-white">Q ↔ A mapping</h3>
+      <ul className="mt-3 space-y-4">
+        {pairs.map((pair, i) => (
+          <li key={i} className="rounded-lg border border-[var(--color-surface-border)] bg-black/20 p-3">
+            <label className="text-xs text-slate-400">Question</label>
+            <input
+              value={pair.question}
+              onChange={(e) => {
+                const next = [...pairs]
+                next[i] = { ...pair, question: e.target.value }
+                onChange(next)
+              }}
+              className="mt-1 w-full rounded border border-[var(--color-surface-border)] bg-black/30 px-2 py-1 text-sm text-white"
+            />
+            <label className="mt-2 block text-xs text-slate-400">Answer summary</label>
+            <textarea
+              value={pair.answer}
+              onChange={(e) => {
+                const next = [...pairs]
+                next[i] = { ...pair, answer: e.target.value }
+                onChange(next)
+              }}
+              rows={2}
+              className="mt-1 w-full rounded border border-[var(--color-surface-border)] bg-black/30 px-2 py-1 text-sm text-white"
+            />
+          </li>
+        ))}
+      </ul>
+    </Card>
   )
 }
 

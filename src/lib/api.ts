@@ -163,8 +163,17 @@ export interface OutputRecord {
   updated_at: string
 }
 
+export interface InterviewMeta {
+  jd_text: string | null
+  scorecard_id: string | null
+  blind_mode: boolean
+  candidate_name: string | null
+  candidate_email: string | null
+}
+
 export interface SessionWithOutput extends SessionDetail {
   output: OutputRecord | null
+  interview_meta?: InterviewMeta | null
 }
 
 export interface ProcessResult {
@@ -179,8 +188,45 @@ export async function fetchSessionFull(client: AxiosInstance, sessionId: string)
   return data
 }
 
-export async function processSession(client: AxiosInstance, sessionId: string) {
-  const { data } = await client.post<ProcessResult>(`/api/sessions/${sessionId}/process`)
+export interface InterviewProcessOptions {
+  jd_text?: string | null
+  scorecard_id?: string | null
+  blind_mode?: boolean
+  candidate_name?: string | null
+  candidate_email?: string | null
+  panel_transcripts?: string[] | null
+}
+
+export interface ScorecardCriterion {
+  id: string
+  label: string
+  weight: number
+}
+
+export interface ScorecardTemplate {
+  id: string
+  title: string
+  criteria: ScorecardCriterion[]
+}
+
+export async function fetchScorecards(client: AxiosInstance) {
+  const { data } = await client.get<ScorecardTemplate[]>('/api/interview/scorecards')
+  return data
+}
+
+export async function processSession(
+  client: AxiosInstance,
+  sessionId: string,
+  interviewOptions?: InterviewProcessOptions | null,
+) {
+  const body =
+    interviewOptions && Object.keys(interviewOptions).length > 0
+      ? { interview_options: interviewOptions }
+      : undefined
+  const { data } = await client.post<ProcessResult>(
+    `/api/sessions/${sessionId}/process`,
+    body,
+  )
   return data
 }
 

@@ -6,9 +6,14 @@ import { TeamsImportPanel } from '@/components/teams/TeamsImportPanel'
 import { Card } from '@/components/ui/Card'
 import { useApi } from '@/hooks/useApi'
 import {
+  InterviewOptionsPanel,
+  defaultInterviewOptions,
+} from '@/components/interview/InterviewOptionsPanel'
+import {
   createSession,
   getApiErrorMessage,
   processSession,
+  type InterviewProcessOptions,
   uploadTranscriptFile,
 } from '@/lib/api'
 import { cn } from '@/lib/utils'
@@ -26,6 +31,9 @@ export function NewSession() {
   const [loading, setLoading] = useState(false)
   const [aiStatus, setAiStatus] = useState<AiRunStatus>('idle')
   const [runAi, setRunAi] = useState(true)
+  const [interviewOptions, setInterviewOptions] = useState<InterviewProcessOptions>(
+    defaultInterviewOptions,
+  )
   const api = useApi()
   const navigate = useNavigate()
 
@@ -41,7 +49,11 @@ export function NewSession() {
     try {
       const session = await uploadTranscriptFile(api, file, mode, title.trim() || undefined)
       if (runAi) {
-        const result = await processSession(api, session.id)
+        const result = await processSession(
+          api,
+          session.id,
+          mode === 'interview' ? interviewOptions : null,
+        )
         saveAiMeta(session.id, {
           provider: result.provider,
           truncated: result.truncated,
@@ -72,7 +84,11 @@ export function NewSession() {
         transcript_text: transcript.trim(),
       })
       if (runAi) {
-        const result = await processSession(api, session.id)
+        const result = await processSession(
+          api,
+          session.id,
+          mode === 'interview' ? interviewOptions : null,
+        )
         saveAiMeta(session.id, {
           provider: result.provider,
           truncated: result.truncated,
@@ -156,7 +172,17 @@ export function NewSession() {
             ))}
           </div>
 
-          {tab === 'teams' && <TeamsImportPanel mode={mode} runAi={runAi} />}
+          {mode === 'interview' && (
+            <InterviewOptionsPanel value={interviewOptions} onChange={setInterviewOptions} />
+          )}
+
+          {tab === 'teams' && (
+            <TeamsImportPanel
+              mode={mode}
+              runAi={runAi}
+              interviewOptions={mode === 'interview' ? interviewOptions : undefined}
+            />
+          )}
 
           {tab === 'upload' && (
             <div className="space-y-4">

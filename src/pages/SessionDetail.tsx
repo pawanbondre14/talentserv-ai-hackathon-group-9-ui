@@ -12,6 +12,10 @@ import {
   type AiRunStatus,
 } from '@/components/output/AiStatusBadge'
 import { ExportBar } from '@/components/output/ExportBar'
+import {
+  InterviewOptionsPanel,
+  defaultInterviewOptions,
+} from '@/components/interview/InterviewOptionsPanel'
 import { InterviewOutputEditor } from '@/components/output/InterviewOutputEditor'
 import { MeetingOutputEditor } from '@/components/output/MeetingOutputEditor'
 import { useApi } from '@/hooks/useApi'
@@ -20,6 +24,7 @@ import {
   getApiErrorMessage,
   processSession,
   updateSessionOutput,
+  type InterviewProcessOptions,
   type SessionWithOutput,
 } from '@/lib/api'
 import type { InterviewFeedbackOutput, MeetingMinutesOutput } from '@/lib/types'
@@ -62,11 +67,25 @@ export function SessionDetail() {
   const [saving, setSaving] = useState(false)
   const [saveOk, setSaveOk] = useState(false)
   const [showTranscript, setShowTranscript] = useState(false)
+  const [interviewOptions, setInterviewOptions] = useState<InterviewProcessOptions>(
+    defaultInterviewOptions,
+  )
 
   const load = useCallback(async () => {
     if (!id) return
     const data = await fetchSessionFull(api, id)
     setSession(data)
+    if (data.interview_meta) {
+      const m = data.interview_meta
+      setInterviewOptions({
+        jd_text: m.jd_text,
+        scorecard_id: m.scorecard_id,
+        blind_mode: m.blind_mode,
+        candidate_name: m.candidate_name,
+        candidate_email: m.candidate_email,
+        panel_transcripts: null,
+      })
+    }
     const draft = id ? loadDraftBackup<MeetingMinutesOutput | InterviewFeedbackOutput>(id) : null
     const raw = data.output?.edited_json ?? data.output?.ai_json
     if (draft && data.status === 'ready') {
@@ -125,7 +144,11 @@ export function SessionDetail() {
     setAiProvider(null)
     setError(null)
     try {
-      const result = await processSession(api, id)
+      const result = await processSession(
+        api,
+        id,
+        session?.mode === 'interview' ? interviewOptions : null,
+      )
       setSession({ ...session!, ...result.session, output: result.output })
       setAiStatus('done')
       setAiProvider(result.provider)
@@ -255,6 +278,10 @@ export function SessionDetail() {
       </div>
 
       {error && <p className="rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-300">{error}</p>}
+
+      {session.mode === 'interview' && (
+        <InterviewOptionsPanel value={interviewOptions} onChange={setInterviewOptions} />
+      )}
 
       {session.word_count < 50 && !hasOutput && (
         <p className="text-sm text-amber-200/90">

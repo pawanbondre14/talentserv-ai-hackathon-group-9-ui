@@ -21,8 +21,8 @@ export function AppShell() {
             <Sparkles className="h-5 w-5 text-white" />
           </div>
           <div>
-            <p className="text-sm font-semibold text-white">MeetingFeed AI</p>
-            <p className="text-xs text-[var(--color-muted)]">Meeting Feed Generator</p>
+            <p className="text-sm font-semibold text-white">MeetPilot AI</p>
+            <p className="text-xs text-[var(--color-muted)]">Turn talk into action with AI</p>
           </div>
         </div>
         <nav className="flex flex-1 flex-col gap-1 p-3">
@@ -55,7 +55,7 @@ export function AppShell() {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <FileText className="h-5 w-5 text-indigo-400" />
-              <span className="font-semibold">MeetingFeed AI</span>
+              <span className="font-semibold">MeetPilot AI</span>
             </div>
             <UserButton afterSignOutUrl="/sign-in" />
           </div>

@@ -30,7 +30,7 @@ export function Dashboard() {
         transition={{ duration: 0.4 }}
       >
         <h1 className="text-3xl font-bold tracking-tight text-white md:text-4xl">
-          MeetingFeed AI
+          MeetPilot AI
         </h1>
         <p className="mt-2 max-w-2xl text-[var(--color-muted)]">
           Turn Teams transcripts, uploads, or pasted notes into structured meeting minutes or

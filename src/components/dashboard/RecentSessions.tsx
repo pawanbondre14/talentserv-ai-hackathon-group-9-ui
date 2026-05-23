@@ -11,7 +11,7 @@ export function RecentSessions() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    fetchSessions(api, { limit: 5 })
+    fetchSessions(api, { limit: 3 })
       .then((data) => setItems(data.items))
       .catch(() => setItems([]))
       .finally(() => setLoading(false))

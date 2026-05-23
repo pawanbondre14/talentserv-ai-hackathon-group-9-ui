@@ -1,3 +1,4 @@
+import { useAuth } from '@clerk/clerk-react'
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Cloud, FlaskConical, Link2, Loader2, Unlink } from 'lucide-react'
@@ -12,6 +13,7 @@ import {
   getApiErrorMessage,
   importTeamsTranscript,
   processSession,
+  type InterviewProcessOptions,
   type TeamsTranscriptListItem,
 } from '@/lib/api'
 import { cn } from '@/lib/utils'
@@ -19,11 +21,14 @@ import { cn } from '@/lib/utils'
 export function TeamsImportPanel({
   mode,
   runAi,
+  interviewOptions,
 }: {
   mode: 'meeting' | 'interview'
   runAi: boolean
+  interviewOptions?: InterviewProcessOptions
 }) {
   const api = useApi()
+  const { isSignedIn, isLoaded } = useAuth()
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const [items, setItems] = useState<TeamsTranscriptListItem[]>([])
@@ -73,6 +78,12 @@ export function TeamsImportPanel({
 
   async function handleConnect() {
     setError(null)
+    if (!isLoaded) return
+    if (!isSignedIn) {
+      setError('Sign in to MeetPilot AI first, then connect Microsoft.')
+      navigate('/sign-in')
+      return
+    }
     try {
       const { url } = await getMicrosoftAuthUrl(api)
       window.location.href = url
@@ -102,7 +113,11 @@ export function TeamsImportPanel({
         title: item.title,
       })
       if (runAi) {
-        const result = await processSession(api, session.id)
+        const result = await processSession(
+          api,
+          session.id,
+          mode === 'interview' ? interviewOptions : null,
+        )
         saveAiMeta(session.id, {
           provider: result.provider,
           truncated: result.truncated,
@@ -149,7 +164,8 @@ export function TeamsImportPanel({
             <button
               type="button"
               onClick={handleConnect}
-              className="inline-flex items-center gap-2 rounded-lg bg-[#2f2f2f] px-3 py-2 text-sm font-medium text-white hover:bg-[#3d3d3d]"
+              disabled={!isLoaded || !isSignedIn}
+              className="inline-flex items-center gap-2 rounded-lg bg-[#2f2f2f] px-3 py-2 text-sm font-medium text-white hover:bg-[#3d3d3d] disabled:opacity-50"
             >
               <Link2 className="h-4 w-4" />
               Connect Microsoft account
