@@ -1,0 +1,186 @@
+import { useState } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
+import { Loader2, Upload } from 'lucide-react'
+import { AiStatusPanel, saveAiMeta, type AiRunStatus } from '@/components/output/AiStatusBadge'
+import { Card } from '@/components/ui/Card'
+import { useApi } from '@/hooks/useApi'
+import { createSession, processSession, uploadTranscriptFile } from '@/lib/api'
+import { cn } from '@/lib/utils'
+
+export function NewSession() {
+  const [params] = useSearchParams()
+  const initialMode = params.get('mode') === 'interview' ? 'interview' : 'meeting'
+  const [mode, setMode] = useState<'meeting' | 'interview'>(initialMode)
+  const [title, setTitle] = useState('')
+  const [transcript, setTranscript] = useState('')
+  const [error, setError] = useState<string | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [aiStatus, setAiStatus] = useState<AiRunStatus>('idle')
+  const [runAi, setRunAi] = useState(true)
+  const api = useApi()
+  const navigate = useNavigate()
+
+  const wordCount = transcript.trim() ? transcript.trim().split(/\s+/).length : 0
+  const canSubmit = wordCount >= 50
+
+  async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setLoading(true)
+    setError(null)
+    try {
+      const session = await uploadTranscriptFile(api, file, mode, title.trim() || undefined)
+      if (runAi) {
+        const result = await processSession(api, session.id)
+        saveAiMeta(session.id, {
+          provider: result.provider,
+          truncated: result.truncated,
+          completedAt: new Date().toISOString(),
+        })
+      }
+      navigate(`/session/${session.id}`)
+    } catch (err: unknown) {
+      const message =
+        err && typeof err === 'object' && 'response' in err
+          ? String((err as { response?: { data?: { detail?: string } } }).response?.data?.detail)
+          : 'Upload failed.'
+      setError(message)
+    } finally {
+      setLoading(false)
+      e.target.value = ''
+    }
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!canSubmit) return
+    setLoading(true)
+    setAiStatus(runAi ? 'processing' : 'idle')
+    setError(null)
+    try {
+      const session = await createSession(api, {
+        title: title.trim() || undefined,
+        mode,
+        source: 'paste',
+        transcript_text: transcript.trim(),
+      })
+      if (runAi) {
+        const result = await processSession(api, session.id)
+        saveAiMeta(session.id, {
+          provider: result.provider,
+          truncated: result.truncated,
+          completedAt: new Date().toISOString(),
+        })
+      }
+      navigate(`/session/${session.id}`)
+    } catch (err: unknown) {
+      const message =
+        err && typeof err === 'object' && 'response' in err
+          ? String((err as { response?: { data?: { detail?: string } } }).response?.data?.detail)
+          : 'Failed to create session. Check API and database connection.'
+      setAiStatus('error')
+      setError(message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="mx-auto max-w-3xl space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold text-white">New session</h1>
+        <p className="mt-1 text-sm text-[var(--color-muted)]">
+          Paste a transcript (min 50 words) and generate meeting minutes or interview feedback.
+        </p>
+      </div>
+
+      <Card>
+        <form onSubmit={handleSubmit} className="space-y-5">
+          <div className="flex gap-2 rounded-lg bg-black/30 p-1">
+            {(['meeting', 'interview'] as const).map((m) => (
+              <button
+                key={m}
+                type="button"
+                onClick={() => setMode(m)}
+                className={cn(
+                  'flex-1 rounded-md py-2 text-sm font-medium capitalize transition-colors',
+                  mode === m
+                    ? 'bg-indigo-600 text-white'
+                    : 'text-slate-400 hover:text-white',
+                )}
+              >
+                {m === 'meeting' ? 'Meeting minutes' : 'Interview feedback'}
+              </button>
+            ))}
+          </div>
+
+          <div>
+            <label className="text-sm font-medium text-slate-300">Title (optional)</label>
+            <input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              className="mt-1 w-full rounded-lg border border-[var(--color-surface-border)] bg-black/30 px-3 py-2 text-sm text-white outline-none focus:border-indigo-500"
+              placeholder="e.g. Sprint planning — May 23"
+            />
+          </div>
+
+          <div>
+            <label className="text-sm font-medium text-slate-300">Upload .txt file</label>
+            <label className="mt-1 flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed border-[var(--color-surface-border)] bg-black/20 px-4 py-4 text-sm text-slate-400 hover:border-indigo-500/50 hover:text-slate-200">
+              <Upload className="h-4 w-4" />
+              Choose transcript file
+              <input
+                type="file"
+                accept=".txt,text/plain"
+                className="hidden"
+                disabled={loading}
+                onChange={handleFileUpload}
+              />
+            </label>
+          </div>
+
+          <div>
+            <label className="text-sm font-medium text-slate-300">Or paste transcript</label>
+            <textarea
+              value={transcript}
+              onChange={(e) => setTranscript(e.target.value)}
+              rows={12}
+              className="mt-1 w-full resize-y rounded-lg border border-[var(--color-surface-border)] bg-black/30 px-3 py-2 text-sm text-white outline-none focus:border-indigo-500"
+              placeholder="Paste your meeting or interview transcript here…"
+            />
+            <p className="mt-1 text-xs text-slate-500">
+              {wordCount} words {wordCount < 50 && '(minimum 50 required)'}
+            </p>
+          </div>
+
+          <label className="flex items-center gap-2 text-sm text-slate-300">
+            <input
+              type="checkbox"
+              checked={runAi}
+              onChange={(e) => setRunAi(e.target.checked)}
+              className="rounded border-slate-600 bg-black/30 text-indigo-600"
+            />
+            Generate AI output immediately after saving
+          </label>
+
+          {runAi && (loading || aiStatus !== 'idle') && (
+            <AiStatusPanel mode={mode} status={loading ? 'processing' : aiStatus} />
+          )}
+
+          {error && (
+            <p className="rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-300">{error}</p>
+          )}
+
+          <button
+            type="submit"
+            disabled={!canSubmit || loading}
+            className="flex w-full items-center justify-center gap-2 rounded-lg bg-indigo-600 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {loading && <Loader2 className="h-4 w-4 animate-spin" />}
+            {runAi ? 'Save & generate' : 'Save draft'}
+          </button>
+        </form>
+      </Card>
+    </div>
+  )
+}
