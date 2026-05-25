@@ -69,11 +69,16 @@ export function createApiClient(
       const config = error.config as RetryableConfig
 
       if (status === 401 && !config._authRetry) {
+        const hadAuth = Boolean(config.headers?.Authorization)
         config._authRetry = true
         const token = await getToken({ skipCache: true })
         if (token) {
           config.headers.Authorization = `Bearer ${token}`
           return client.request(config)
+        }
+
+        if (!hadAuth) {
+          return Promise.reject(error)
         }
 
         if (!unauthorizedHandled) {
