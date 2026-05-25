@@ -37,36 +37,37 @@ export function useAutosave<T>(
     }
 
     inFlightRef.current = true
-    pendingRef.current = false
-    setStatus('saving')
-
-    const valueToSave = valueRef.current
-    const serializedToSave = serializedRef.current
-    const saveFnToUse = saveFnRef.current
-    let saved = false
-
     try {
-      await saveFnToUse(valueToSave)
-      saved = true
-      lastSavedSerializedRef.current = serializedToSave
-    } catch {
-      if (generation === generationRef.current) {
-        setStatus('error')
+      while (enabledRef.current && generation === generationRef.current) {
+        pendingRef.current = false
+        setStatus('saving')
+
+        const valueToSave = valueRef.current
+        const serializedToSave = serializedRef.current
+        const saveFnToUse = saveFnRef.current
+
+        try {
+          await saveFnToUse(valueToSave)
+          lastSavedSerializedRef.current = serializedToSave
+        } catch {
+          if (generation === generationRef.current) {
+            setStatus('error')
+          }
+          return
+        }
+
+        if (!enabledRef.current || generation !== generationRef.current) return
+
+        if (!pendingRef.current && serializedRef.current === serializedToSave) {
+          setStatus('saved')
+          return
+        }
+
+        setStatus('pending')
       }
     } finally {
       inFlightRef.current = false
     }
-
-    if (!saved || !enabledRef.current || generation !== generationRef.current) return
-
-    if (pendingRef.current || serializedRef.current !== serializedToSave) {
-      pendingRef.current = false
-      setStatus('pending')
-      void flushLatest(generation)
-      return
-    }
-
-    setStatus('saved')
   }, [])
 
   useEffect(() => {
@@ -74,7 +75,6 @@ export function useAutosave<T>(
       generationRef.current += 1
       isFirst.current = true
       pendingRef.current = false
-      setStatus('idle')
       return
     }
     if (isFirst.current) {
@@ -93,5 +93,5 @@ export function useAutosave<T>(
     return () => clearTimeout(timer)
   }, [serialized, enabled, delayMs, saveFn, flushLatest])
 
-  return status
+  return enabled ? status : 'idle'
 }

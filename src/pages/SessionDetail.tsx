@@ -121,9 +121,6 @@ export function SessionDetail() {
   useEffect(() => {
     if (!id) return
     let active = true
-    setSession(null)
-    setOutput(null)
-    setError(null)
     load(id, () => active).catch(() => {
       if (active) setError('Session not found or API unavailable.')
     })
