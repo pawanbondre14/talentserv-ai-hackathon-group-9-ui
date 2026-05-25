@@ -1,6 +1,6 @@
-# MeetingFeed AI — Frontend
+# MeetPilot AI — Frontend
 
-React + Vite UI for **Meeting Feed Generator AI**.
+React + Vite UI for **Turn talk into action with AI AI**.
 
 ## Phase 1
 
@@ -35,4 +35,23 @@ Open http://localhost:5173
 npm run build
 ```
 
-Deploy to Vercel; add the same env vars in project settings.
+## Deploy to Vercel
+
+1. **Root Directory** (Project Settings → General): `talentserv-ai-hackathon-group-9-ui`  
+   If you deploy only the UI repo, use `.` (repo root).
+
+2. **Build command** must be `npm run build` — not `vite build`.  
+   `vercel.json` in this folder sets that automatically.
+
+3. **Environment variables** (Project Settings → Environment Variables):
+   - `VITE_CLERK_PUBLISHABLE_KEY`
+   - `VITE_API_URL` — your deployed backend URL (e.g. `https://your-api.onrender.com`)
+
+4. From this folder:
+
+```bash
+cd talentserv-ai-hackathon-group-9-ui
+vercel
+```
+
+5. Update backend `CORS_ORIGINS` and `FRONTEND_URL` to your Vercel URL (e.g. `https://your-app.vercel.app`).
