@@ -1,7 +1,12 @@
+import { useAuth } from '@clerk/clerk-react'
 import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { motion } from 'framer-motion'
 import { Calendar, FileCheck, Search, Trash2, Users } from 'lucide-react'
 import { Card } from '@/components/ui/Card'
+import { FadeIn } from '@/components/ui/FadeIn'
+import { SessionCardSkeleton } from '@/components/ui/Skeleton'
+import { Spinner } from '@/components/ui/Spinner'
 import { useApi } from '@/hooks/useApi'
 import {
   deleteSession,
@@ -31,6 +36,7 @@ function statusColor(status: string) {
 
 export function History() {
   const api = useApi()
+  const { isLoaded, isSignedIn } = useAuth()
   const [query, setQuery] = useState('')
   const [modeFilter, setModeFilter] = useState<ModeFilter>('all')
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
@@ -67,9 +73,10 @@ export function History() {
   )
 
   useEffect(() => {
+    if (!isLoaded || !isSignedIn) return
     const timer = setTimeout(() => fetchPage(0, false), 300)
     return () => clearTimeout(timer)
-  }, [fetchPage])
+  }, [fetchPage, isLoaded, isSignedIn])
 
   async function handleLoadMore() {
     await fetchPage(items.length, true)
@@ -95,12 +102,12 @@ export function History() {
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
-      <div>
+      <FadeIn>
         <h1 className="text-2xl font-bold text-white">History</h1>
         <p className="mt-1 text-sm text-[var(--color-muted)]">
           Search titles, transcripts, and AI output. Filter by type or status.
         </p>
-      </div>
+      </FadeIn>
 
       <div className="relative">
         <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
@@ -151,7 +158,13 @@ export function History() {
       </div>
 
       {error && <p className="text-sm text-red-300">{error}</p>}
-      {loading && <p className="text-sm text-slate-500">Loading…</p>}
+      {loading && (
+        <div className="space-y-3">
+          {[1, 2, 3, 4].map((i) => (
+            <SessionCardSkeleton key={i} />
+          ))}
+        </div>
+      )}
 
       {!loading && !error && (
         <p className="text-xs text-slate-500">
@@ -160,8 +173,14 @@ export function History() {
       )}
 
       <div className="space-y-3">
-        {items.map((item) => (
-          <Link key={item.id} to={`/session/${item.id}`} className="block">
+        {items.map((item, i) => (
+          <motion.div
+            key={item.id}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: i * 0.04, duration: 0.28 }}
+          >
+          <Link to={`/session/${item.id}`} className="block">
             <Card hover>
               <div className="flex items-start justify-between gap-4">
                 <div className="min-w-0 flex-1">
@@ -204,6 +223,7 @@ export function History() {
               </div>
             </Card>
           </Link>
+          </motion.div>
         ))}
         {!loading && items.length === 0 && (
           <Card>
@@ -219,7 +239,7 @@ export function History() {
           disabled={loadingMore}
           className="w-full rounded-lg border border-[var(--color-surface-border)] py-2.5 text-sm text-slate-300 hover:border-indigo-500/50 hover:text-white"
         >
-          {loadingMore ? 'Loading…' : 'Load more'}
+          {loadingMore ? <Spinner size="sm" label="Loading more…" /> : 'Load more'}
         </button>
       )}
     </div>

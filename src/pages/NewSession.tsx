@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Loader2, Upload } from 'lucide-react'
+import { FadeIn } from '@/components/ui/FadeIn'
 import { AiStatusPanel, saveAiMeta, type AiRunStatus } from '@/components/output/AiStatusBadge'
 import { TeamsImportPanel } from '@/components/teams/TeamsImportPanel'
 import { Card } from '@/components/ui/Card'
@@ -111,13 +112,14 @@ export function NewSession() {
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
-      <div>
+      <FadeIn>
         <h1 className="text-2xl font-bold text-white">New session</h1>
         <p className="mt-1 text-sm text-[var(--color-muted)]">
           Import from Teams / OneDrive, upload a file, or paste a transcript.
         </p>
-      </div>
+      </FadeIn>
 
+      <FadeIn delay={0.08}>
       <Card>
         <div className="space-y-5">
           <div className="flex gap-2 rounded-lg bg-black/30 p-1">
@@ -283,6 +285,7 @@ export function NewSession() {
           )}
         </div>
       </Card>
+      </FadeIn>
     </div>
   )
 }

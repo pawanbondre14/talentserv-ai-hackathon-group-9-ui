@@ -205,7 +205,13 @@ export function SessionDetail() {
   }
 
   if (!session) {
-    return <p className="text-slate-500">Loading session…</p>
+    return (
+      <div className="mx-auto max-w-3xl space-y-4">
+        <div className="h-8 w-48 animate-pulse rounded-lg bg-white/10" />
+        <div className="h-64 animate-pulse rounded-xl bg-white/5" />
+        <p className="text-center text-sm text-slate-500">Loading session…</p>
+      </div>
+    )
   }
 
   return (
