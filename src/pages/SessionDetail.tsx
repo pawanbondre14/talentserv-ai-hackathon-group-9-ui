@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { ArrowLeft, Loader2, Sparkles, Save } from 'lucide-react'
 import { AutosaveIndicator } from '@/components/ui/AutosaveIndicator'
@@ -71,10 +71,15 @@ export function SessionDetail() {
   const [interviewOptions, setInterviewOptions] = useState<InterviewProcessOptions>(
     defaultInterviewOptions,
   )
+  const outputRef = useRef(output)
 
-  const load = useCallback(async () => {
-    if (!id) return
-    const data = await fetchSessionFull(api, id)
+  useEffect(() => {
+    outputRef.current = output
+  }, [output])
+
+  const load = useCallback(async (sessionId: string, isActive: () => boolean) => {
+    const data = await fetchSessionFull(api, sessionId)
+    if (!isActive()) return
     setSession(data)
     if (data.interview_meta) {
       const m = data.interview_meta
@@ -87,7 +92,7 @@ export function SessionDetail() {
         panel_transcripts: null,
       })
     }
-    const draft = id ? loadDraftBackup<MeetingMinutesOutput | InterviewFeedbackOutput>(id) : null
+    const draft = loadDraftBackup<MeetingMinutesOutput | InterviewFeedbackOutput>(sessionId)
     const raw = data.output?.edited_json ?? data.output?.ai_json
     if (draft && data.status === 'ready') {
       setOutput(draft)
@@ -102,7 +107,7 @@ export function SessionDetail() {
     if (data.status === 'processing') {
       setAiStatus('processing')
     } else if (data.status === 'ready' && data.output) {
-      const meta = id ? loadAiMeta(id) : null
+      const meta = loadAiMeta(sessionId)
       setAiStatus('done')
       setAiProvider(meta?.provider ?? null)
       setAiTruncated(meta?.truncated ?? false)
@@ -111,21 +116,32 @@ export function SessionDetail() {
     } else {
       setAiStatus('idle')
     }
-  }, [api, id])
+  }, [api])
 
   useEffect(() => {
-    load().catch(() => setError('Session not found or API unavailable.'))
-  }, [load])
+    if (!id) return
+    let active = true
+    setSession(null)
+    setOutput(null)
+    setError(null)
+    load(id, () => active).catch(() => {
+      if (active) setError('Session not found or API unavailable.')
+    })
+    return () => {
+      active = false
+    }
+  }, [id, load])
 
-  const hasOutput = output !== null && session?.status === 'ready'
+  const isCurrentSession = Boolean(id && session?.id === id)
+  const hasOutput = isCurrentSession && output !== null && session?.status === 'ready'
 
   const saveOutput = useCallback(
     async (data: MeetingMinutesOutput | InterviewFeedbackOutput) => {
-      if (!id) return
+      if (!id || !isCurrentSession) return
       await updateSessionOutput(api, id, data as unknown as Record<string, unknown>)
-      if (id) clearDraftBackup(id)
+      if (outputRef.current === data) clearDraftBackup(id)
     },
-    [api, id],
+    [api, id, isCurrentSession],
   )
 
   const autosaveStatus = useAutosave(
