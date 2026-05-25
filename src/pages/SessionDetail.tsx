@@ -121,11 +121,14 @@ export function SessionDetail() {
   useEffect(() => {
     if (!id) return
     let active = true
-    load(id, () => active).catch(() => {
-      if (active) setError('Session not found or API unavailable.')
-    })
+    const timer = window.setTimeout(() => {
+      void load(id, () => active).catch(() => {
+        if (active) setError('Session not found or API unavailable.')
+      })
+    }, 0)
     return () => {
       active = false
+      window.clearTimeout(timer)
     }
   }, [id, load])
 
