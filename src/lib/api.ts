@@ -188,6 +188,48 @@ export async function fetchSessionFull(client: AxiosInstance, sessionId: string)
   return data
 }
 
+export interface ChatMessage {
+  id: string
+  session_id: string
+  role: 'user' | 'assistant'
+  content: string
+  created_at: string
+}
+
+export interface ChatListResponse {
+  items: ChatMessage[]
+  total: number
+}
+
+export interface ChatSendResponse {
+  user_message: ChatMessage
+  assistant_message: ChatMessage
+  provider: string
+}
+
+export async function fetchSessionChat(client: AxiosInstance, sessionId: string) {
+  const { data } = await client.get<ChatListResponse>(`/api/sessions/${sessionId}/chat`)
+  return data
+}
+
+export async function sendSessionChat(
+  client: AxiosInstance,
+  sessionId: string,
+  content: string,
+) {
+  const { data } = await client.post<ChatSendResponse>(`/api/sessions/${sessionId}/chat`, {
+    content,
+  })
+  return data
+}
+
+export async function clearSessionChat(client: AxiosInstance, sessionId: string) {
+  const { data } = await client.delete<{ deleted: number }>(
+    `/api/sessions/${sessionId}/chat`,
+  )
+  return data
+}
+
 export interface InterviewProcessOptions {
   jd_text?: string | null
   scorecard_id?: string | null

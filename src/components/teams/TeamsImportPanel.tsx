@@ -52,8 +52,8 @@ export function TeamsImportPanel({
       setAzureConfigured(status.azure_configured)
       setIntegrationMode(transcripts.integration_mode)
       setItems(transcripts.items)
-    } catch {
-      setError('Could not load Teams transcripts.')
+    } catch (err: unknown) {
+      setError(getApiErrorMessage(err, 'Could not load Teams transcripts.'))
     } finally {
       setLoading(false)
     }

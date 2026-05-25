@@ -16,6 +16,7 @@ import {
   InterviewOptionsPanel,
   defaultInterviewOptions,
 } from '@/components/interview/InterviewOptionsPanel'
+import { FloatingSessionChat } from '@/components/chat/FloatingSessionChat'
 import { InterviewOutputEditor } from '@/components/output/InterviewOutputEditor'
 import { MeetingOutputEditor } from '@/components/output/MeetingOutputEditor'
 import { useApi } from '@/hooks/useApi'
@@ -325,6 +326,15 @@ export function SessionDetail() {
             </pre>
           )}
         </Card>
+      )}
+
+      {id && (
+        <FloatingSessionChat
+          sessionId={id}
+          mode={session.mode}
+          enabled={hasOutput}
+          sessionTitle={session.title}
+        />
       )}
     </div>
   )
