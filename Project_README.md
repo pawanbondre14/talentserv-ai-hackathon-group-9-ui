@@ -7,7 +7,7 @@
 | Component | Repository folder | Stack |
 |-----------|-------------------|--------|
 | **Backend** | [`talentserv-ai-hackathon-group-9-backend`](./talentserv-ai-hackathon-group-9-backend) | FastAPI, Supabase Postgres, Clerk JWT, OpenAI, **LangGraph** |
-| **Frontend** | [`talentserv-ai-hackathon-group-9-ui`](./talentserv-ai-hackathon-group-9-ui) | React 18, Vite, Tailwind, Clerk |
+| **Frontend** | [`talentserv-ai-hackathon-group-9-ui`](./talentserv-ai-hackathon-group-9-ui) | React 19, Vite, Tailwind, Clerk |
 
 ---
 
@@ -30,7 +30,7 @@ MeetPilot AI ingests transcripts, runs specialized AI pipelines, and returns **e
 | **Multi-agent AI (LangGraph)** | Map-reduce on long transcripts + parallel specialist reviewers (interview) |
 | **Smart routing** | Short transcripts → single LLM call; long → multi-node graph (`strategy=auto`) |
 | **Auth & persistence** | Clerk sign-in; Supabase stores sessions, outputs, chat history |
-| **Teams / OneDrive** | Import `.vtt` recordings from Microsoft Graph (mock mode for demo without Azure) |
+| **Teams / OneDrive** | Browse personal OneDrive folders; import `.txt` / `.vtt` via Microsoft Graph (demo mode without Azure) |
 | **Post-session chat** | Ask questions about transcript + AI output in context |
 | **Interview extras** | Scorecards, blind mode (PII redaction), panel transcript merge |
 
@@ -78,7 +78,8 @@ We split the hackathon into **infrastructure first**, then **core AI**, then **i
 | **2** | LLM processing, structured JSON, export | Meeting + interview modes on `/process` |
 | **2.5** | LangGraph orchestration | Single graph entry; multi-agent for long transcripts |
 | **3** | Search, autosave, uploads | Production-like session workflow |
-| **4** | Microsoft Teams / OneDrive | Import VTT from Recordings folder |
+| **4** | Microsoft Teams / OneDrive | OAuth + folder browser; import `.txt` / `.vtt` |
+| **5** | Interview extras | Scorecards, blind mode, panel merge API |
 | **6** | Session chat | RAG-style Q&A on transcript + output |
 
 ### 4.2 Key modules
@@ -93,10 +94,11 @@ We split the hackathon into **infrastructure first**, then **core AI**, then **i
 | **Interview subgraph** | `backend/app/graphs/interview/` | Classify chunks → parallel reviewers → hiring + fairness |
 | **LLM service** | `backend/app/services/llm.py` | OpenAI client, `complete_json`, mock mode |
 | **Interview tools** | `backend/app/routes/interview.py`, `interview_processor.py` | Scorecards, panel merge, blind mode |
-| **Microsoft** | `backend/app/routes/microsoft.py`, `teams.py` | OAuth, VTT listing, import |
+| **Microsoft / OneDrive** | `backend/app/routes/microsoft.py`, `onedrive.py`, `teams.py` | OAuth, folder browse, VTT/TXT import |
 | **Chat** | `backend/app/routes/chat.py` | Persisted session Q&A |
 | **UI pages** | `frontend/src/pages/` | Dashboard, NewSession, SessionDetail, History |
-| **API client** | `frontend/src/lib/` (or services) | Authenticated calls to backend |
+| **OneDrive UI** | `frontend/src/components/teams/TeamsImportPanel.tsx` | Connect, browse, import |
+| **API client** | `frontend/src/lib/api.ts` | Authenticated calls to backend |
 
 ### 4.3 Implementation sequence
 
@@ -108,8 +110,9 @@ We split the hackathon into **infrastructure first**, then **core AI**, then **i
 6. **LangGraph Phase B** — meeting map-reduce (`Send` per chunk)  
 7. **LangGraph Phase C** — interview classify + parallel dimension reviewers + fairness  
 8. **History search** + debounced autosave  
-9. **Teams/OneDrive** import path + demo mocks  
-10. **Session chat** API + UI panel  
+9. **Teams/OneDrive** — OAuth, folder browser, import + demo mocks  
+10. **Interview extras** — scorecards, blind mode, panel merge  
+11. **Session chat** API + UI panel  
 
 ### 4.4 Team responsibilities (template — update names)
 
@@ -135,7 +138,7 @@ We split the hackathon into **infrastructure first**, then **core AI**, then **i
 - [x] Edit and persist AI output
 - [x] Export (Markdown, PDF, DOCX, TXT)
 - [x] Session history with search
-- [x] Teams / OneDrive transcript import (live + mock)
+- [x] Teams / OneDrive folder browse + transcript import (live + mock)
 - [x] Post-session chat on processed sessions
 - [x] Interview scorecards, blind mode, panel merge API
 - [x] `LLM_MOCK=true` for demo without API keys
@@ -195,7 +198,7 @@ Open **http://localhost:5173** · API docs **http://localhost:8000/docs**
 2. Mode **Interview** → **Generate** (enable LangGraph + `strategy=multi` for multi-agent sample).
 3. Open **Session detail** → review rating, strengths, concerns, skill observations.
 4. **Export** PDF or DOCX → show structured output.
-5. **Teams / OneDrive** tab → demo import (mock meetings if Azure not configured).
+5. **Teams / OneDrive** tab → connect Microsoft (live) or browse demo folders → import `.vtt` / `.txt`.
 6. **Chat** tab → ask “What were the main technical strengths?”
 7. Repeat with **Meeting** mode + `meeting_multi_agent_sample.txt`.
 
@@ -207,9 +210,10 @@ Open **http://localhost:5173** · API docs **http://localhost:8000/docs**
 |----------|---------|
 | [PROJECT_PLAN.md](./PROJECT_PLAN.md) | Full product & phase breakdown |
 | [MULTI_AGENT_PLAN.md](./MULTI_AGENT_PLAN.md) | LangGraph design, state, nodes |
-| [Backend README](./talentserv-ai-hackathon-group-9-backend/README.md) | API, env, deploy, tests |
-| [Frontend README](./talentserv-ai-hackathon-group-9-ui/README.md) | UI setup, routes, deploy |
-| [samples/README](./talentserv-ai-hackathon-group-9-backend/samples/README.md) | Test transcripts |
+| [Backend README](../talentserv-ai-hackathon-group-9-backend/README.md) | API phases, env, deploy, tests |
+| [Frontend README](./README.md) | UI setup, routes, deploy |
+| [TEAMS_ONEDRIVE_SETUP.md](../talentserv-ai-hackathon-group-9-backend/TEAMS_ONEDRIVE_SETUP.md) | Azure registration + OneDrive integration |
+| [samples/README](../talentserv-ai-hackathon-group-9-backend/samples/README.md) | Test transcripts |
 
 ---
 
