@@ -19,6 +19,7 @@ export function AuthGuestPage({
   const needsSessionExpiredSignOut = Boolean(sessionExpired && isSignedIn)
 
   useEffect(() => {
+    mountedRef.current = true
     return () => {
       mountedRef.current = false
     }

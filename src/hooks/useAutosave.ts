@@ -25,6 +25,7 @@ export function useAutosave<T>(
   }, [serialized, value])
 
   useEffect(() => {
+    isMountedRef.current = true
     return () => {
       isMountedRef.current = false
     }
