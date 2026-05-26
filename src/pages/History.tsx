@@ -5,6 +5,7 @@ import { motion } from 'framer-motion'
 import { Calendar, FileCheck, Search, Trash2, Users } from 'lucide-react'
 import { Card } from '@/components/ui/Card'
 import { FadeIn } from '@/components/ui/FadeIn'
+import { InlineAlert } from '@/components/ui/InlineAlert'
 import { SessionCardSkeleton } from '@/components/ui/Skeleton'
 import { Spinner } from '@/components/ui/Spinner'
 import { useApi } from '@/hooks/useApi'
@@ -45,6 +46,7 @@ export function History() {
   const [loading, setLoading] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
 
   const fetchPage = useCallback(
@@ -87,12 +89,15 @@ export function History() {
     e.stopPropagation()
     if (!confirm('Delete this session permanently?')) return
     setDeletingId(id)
+    setNotice(null)
     try {
       await deleteSession(api, id)
       setItems((prev) => prev.filter((s) => s.id !== id))
       setTotal((t) => Math.max(0, t - 1))
-    } catch {
-      setError('Failed to delete session.')
+      setNotice('Session deleted.')
+      setTimeout(() => setNotice(null), 2500)
+    } catch (err: unknown) {
+      setError(getApiErrorMessage(err, 'Could not delete session.'))
     } finally {
       setDeletingId(null)
     }
@@ -157,7 +162,8 @@ export function History() {
         ))}
       </div>
 
-      {error && <p className="text-sm text-red-300">{error}</p>}
+      <InlineAlert variant="success">{notice}</InlineAlert>
+      <InlineAlert variant="error">{error}</InlineAlert>
       {loading && (
         <div className="space-y-3">
           {[1, 2, 3, 4].map((i) => (

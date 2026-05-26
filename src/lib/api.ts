@@ -2,6 +2,7 @@ import axios, {
   type AxiosInstance,
   type InternalAxiosRequestConfig,
 } from 'axios'
+import { getStatusFallback, parseApiDetail } from '@/lib/messages'
 
 const baseURL = import.meta.env.VITE_API_URL ?? 'http://localhost:8000'
 
@@ -16,14 +17,28 @@ export function getApiErrorMessage(err: unknown, fallback: string): string {
   if (isSessionExpiredError(err)) {
     return 'Your session expired. Please sign in again.'
   }
+  if (axios.isAxiosError(err)) {
+    const status = err.response?.status
+    if (status === 401) {
+      return 'Your session expired. Please sign in again.'
+    }
+    const detail = parseApiDetail(err.response?.data?.detail)
+    if (detail) return detail
+    if (!err.response) {
+      return getStatusFallback(undefined, 'Network error. Check your connection and try again.')
+    }
+    return getStatusFallback(status, fallback)
+  }
   if (err && typeof err === 'object' && 'response' in err) {
     const status = (err as { response?: { status?: number } }).response?.status
     if (status === 401) {
       return 'Your session expired. Please sign in again.'
     }
-    const detail = (err as { response?: { data?: { detail?: string } } }).response?.data
-      ?.detail
-    if (detail) return String(detail)
+    const detail = parseApiDetail(
+      (err as { response?: { data?: { detail?: unknown } } }).response?.data?.detail,
+    )
+    if (detail) return detail
+    return getStatusFallback(status, fallback)
   }
   return fallback
 }

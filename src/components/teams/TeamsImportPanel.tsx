@@ -1,6 +1,6 @@
 import { useAuth } from '@clerk/clerk-react'
 import { useCallback, useEffect, useState } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import {
   ChevronRight,
   Cloud,
@@ -13,6 +13,7 @@ import {
 } from 'lucide-react'
 import { AiStatusPanel, saveAiMeta } from '@/components/output/AiStatusBadge'
 import { Card } from '@/components/ui/Card'
+import { InlineAlert } from '@/components/ui/InlineAlert'
 import { useApi } from '@/hooks/useApi'
 import {
   browseOneDriveFolder,
@@ -35,15 +36,18 @@ export function TeamsImportPanel({
   mode,
   runAi,
   interviewOptions,
+  initialNotice = null,
+  initialError = null,
 }: {
   mode: 'meeting' | 'interview'
   runAi: boolean
   interviewOptions?: InterviewProcessOptions
+  initialNotice?: string | null
+  initialError?: string | null
 }) {
   const api = useApi()
   const { isSignedIn, isLoaded } = useAuth()
   const navigate = useNavigate()
-  const [searchParams, setSearchParams] = useSearchParams()
   const [items, setItems] = useState<OneDriveBrowseItem[]>([])
   const [folderStack, setFolderStack] = useState<FolderStackItem[]>([
     { id: 'root', name: 'OneDrive' },
@@ -53,15 +57,25 @@ export function TeamsImportPanel({
   const [azureConfigured, setAzureConfigured] = useState(false)
   const [loading, setLoading] = useState(true)
   const [importingId, setImportingId] = useState<string | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  const [notice, setNotice] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(initialError)
+  const [notice, setNotice] = useState<string | null>(initialNotice)
+  const [warning, setWarning] = useState<string | null>(null)
 
   const currentFolder = folderStack[folderStack.length - 1]
+
+  useEffect(() => {
+    if (initialNotice) setNotice(initialNotice)
+  }, [initialNotice])
+
+  useEffect(() => {
+    if (initialError) setError(initialError)
+  }, [initialError])
 
   const loadFolder = useCallback(
     async (folderId: string) => {
       setLoading(true)
       setError(null)
+      setWarning(null)
       try {
         const [status, browse] = await Promise.all([
           getMicrosoftStatus(api),
@@ -71,6 +85,16 @@ export function TeamsImportPanel({
         setAzureConfigured(status.azure_configured)
         setIntegrationMode(browse.integration_mode)
         setItems(browse.items)
+
+        if (
+          status.connected &&
+          status.azure_configured &&
+          browse.integration_mode === 'mock'
+        ) {
+          setWarning(
+            'Could not load your OneDrive. Showing demo folders — try disconnecting and reconnecting Microsoft.',
+          )
+        }
       } catch (err: unknown) {
         setError(getApiErrorMessage(err, 'Could not load OneDrive folder.'))
       } finally {
@@ -83,19 +107,6 @@ export function TeamsImportPanel({
   useEffect(() => {
     loadFolder(currentFolder.id)
   }, [loadFolder, currentFolder.id])
-
-  useEffect(() => {
-    const teams = searchParams.get('teams')
-    if (teams === 'connected') {
-      setNotice('Microsoft account connected. Browse your OneDrive for .txt or .vtt files.')
-      setSearchParams({}, { replace: true })
-      loadFolder(currentFolder.id)
-    }
-    if (teams === 'error') {
-      setError('Microsoft sign-in failed or was cancelled.')
-      setSearchParams({}, { replace: true })
-    }
-  }, [searchParams, setSearchParams, loadFolder, currentFolder.id])
 
   function openFolder(item: OneDriveBrowseItem) {
     setFolderStack((prev) => [...prev, { id: item.id, name: item.name }])
@@ -117,6 +128,7 @@ export function TeamsImportPanel({
 
   async function handleConnect() {
     setError(null)
+    setNotice(null)
     if (!isLoaded) return
     if (!isSignedIn) {
       setError('Sign in to MeetPilot AI first, then connect Microsoft.')
@@ -134,15 +146,23 @@ export function TeamsImportPanel({
   }
 
   async function handleDisconnect() {
-    await disconnectMicrosoft(api)
-    setMsConnected(false)
-    setNotice('Microsoft account disconnected.')
-    setFolderStack([{ id: 'root', name: 'OneDrive' }])
+    setError(null)
+    setNotice(null)
+    try {
+      await disconnectMicrosoft(api)
+      setMsConnected(false)
+      setNotice('Microsoft account disconnected.')
+      setFolderStack([{ id: 'root', name: 'OneDrive' }])
+      await loadFolder('root')
+    } catch (err: unknown) {
+      setError(getApiErrorMessage(err, 'Could not disconnect Microsoft account.'))
+    }
   }
 
   async function handleImport(item: OneDriveBrowseItem) {
     setImportingId(item.id)
     setError(null)
+    setNotice(null)
     try {
       const source = integrationMode === 'live' ? 'onedrive' : 'mock'
       const { session } = await importOneDriveFile(api, {
@@ -166,7 +186,7 @@ export function TeamsImportPanel({
       }
       navigate(`/session/${session.id}`)
     } catch (err: unknown) {
-      setError(getApiErrorMessage(err, 'Import failed.'))
+      setError(getApiErrorMessage(err, 'Could not import this file.'))
     } finally {
       setImportingId(null)
     }
@@ -260,12 +280,9 @@ export function TeamsImportPanel({
         )}
       </div>
 
-      {notice && (
-        <p className="rounded-lg bg-emerald-500/10 px-3 py-2 text-sm text-emerald-200">{notice}</p>
-      )}
-      {error && (
-        <p className="rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-300">{error}</p>
-      )}
+      <InlineAlert variant="success">{notice}</InlineAlert>
+      <InlineAlert variant="warning">{warning}</InlineAlert>
+      <InlineAlert variant="error">{error}</InlineAlert>
 
       {importingId && runAi && <AiStatusPanel mode={mode} status="processing" />}
       {importingId && !runAi && (

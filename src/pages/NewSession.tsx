@@ -1,10 +1,11 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Loader2, Upload } from 'lucide-react'
 import { FadeIn } from '@/components/ui/FadeIn'
 import { AiStatusPanel, saveAiMeta, type AiRunStatus } from '@/components/output/AiStatusBadge'
 import { TeamsImportPanel } from '@/components/teams/TeamsImportPanel'
 import { Card } from '@/components/ui/Card'
+import { InlineAlert } from '@/components/ui/InlineAlert'
 import { useApi } from '@/hooks/useApi'
 import {
   InterviewOptionsPanel,
@@ -17,15 +18,20 @@ import {
   type InterviewProcessOptions,
   uploadTranscriptFile,
 } from '@/lib/api'
+import { getOAuthMessage } from '@/lib/messages'
 import { cn } from '@/lib/utils'
 
 type InputTab = 'paste' | 'upload' | 'teams'
 
 export function NewSession() {
-  const [params] = useSearchParams()
+  const [params, setParams] = useSearchParams()
   const initialMode = params.get('mode') === 'interview' ? 'interview' : 'meeting'
   const [mode, setMode] = useState<'meeting' | 'interview'>(initialMode)
-  const [tab, setTab] = useState<InputTab>('paste')
+  const [tab, setTab] = useState<InputTab>(() =>
+    params.get('teams') ? 'teams' : 'paste',
+  )
+  const [teamsNotice, setTeamsNotice] = useState<string | null>(null)
+  const [teamsError, setTeamsError] = useState<string | null>(null)
   const [title, setTitle] = useState('')
   const [transcript, setTranscript] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -37,6 +43,23 @@ export function NewSession() {
   )
   const api = useApi()
   const navigate = useNavigate()
+
+  useEffect(() => {
+    const teams = params.get('teams')
+    const message = params.get('message')
+    if (teams === 'connected') {
+      setTab('teams')
+      setTeamsNotice(getOAuthMessage(message, 'connected'))
+      setTeamsError(null)
+      setParams({}, { replace: true })
+    }
+    if (teams === 'error') {
+      setTab('teams')
+      setTeamsError(getOAuthMessage(message, 'error'))
+      setTeamsNotice(null)
+      setParams({}, { replace: true })
+    }
+  }, [params, setParams])
 
   const wordCount = transcript.trim() ? transcript.trim().split(/\s+/).length : 0
   const canSubmit = wordCount >= 50
@@ -183,6 +206,8 @@ export function NewSession() {
               mode={mode}
               runAi={runAi}
               interviewOptions={mode === 'interview' ? interviewOptions : undefined}
+              initialNotice={teamsNotice}
+              initialError={teamsError}
             />
           )}
 
@@ -280,9 +305,7 @@ export function NewSession() {
             </label>
           )}
 
-          {error && tab !== 'teams' && (
-            <p className="rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-300">{error}</p>
-          )}
+          {error && tab !== 'teams' && <InlineAlert variant="error">{error}</InlineAlert>}
         </div>
       </Card>
       </FadeIn>

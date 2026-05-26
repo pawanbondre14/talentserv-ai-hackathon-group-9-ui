@@ -17,6 +17,7 @@ import {
   defaultInterviewOptions,
 } from '@/components/interview/InterviewOptionsPanel'
 import { FloatingSessionChat } from '@/components/chat/FloatingSessionChat'
+import { InlineAlert } from '@/components/ui/InlineAlert'
 import { InterviewOutputEditor } from '@/components/output/InterviewOutputEditor'
 import { MeetingOutputEditor } from '@/components/output/MeetingOutputEditor'
 import { useApi } from '@/hooks/useApi'
@@ -114,7 +115,9 @@ export function SessionDetail() {
   }, [api, id])
 
   useEffect(() => {
-    load().catch(() => setError('Session not found or API unavailable.'))
+    load().catch((err: unknown) =>
+      setError(getApiErrorMessage(err, 'Session not found or could not be loaded.')),
+    )
   }, [load])
 
   const hasOutput = output !== null && session?.status === 'ready'
@@ -167,12 +170,7 @@ export function SessionDetail() {
       }
     } catch (err: unknown) {
       setAiStatus('error')
-      setError(
-        getApiErrorMessage(
-          err,
-          'Processing failed. Check API keys or set LLM_MOCK=true.',
-        ),
-      )
+      setError(getApiErrorMessage(err, 'AI processing failed. Try again in a moment.'))
     } finally {
       setProcessing(false)
     }
@@ -186,8 +184,8 @@ export function SessionDetail() {
       await saveOutput(output)
       setSaveOk(true)
       setTimeout(() => setSaveOk(false), 2000)
-    } catch {
-      setError('Failed to save changes.')
+    } catch (err: unknown) {
+      setError(getApiErrorMessage(err, 'Could not save changes.'))
     } finally {
       setSaving(false)
     }
@@ -196,7 +194,7 @@ export function SessionDetail() {
   if (error && !session) {
     return (
       <div className="mx-auto max-w-3xl">
-        <p className="text-red-300">{error}</p>
+        <InlineAlert variant="error">{error}</InlineAlert>
         <Link to="/history" className="mt-4 inline-block text-sm text-indigo-400">
           Back to history
         </Link>
@@ -284,7 +282,7 @@ export function SessionDetail() {
         </div>
       </div>
 
-      {error && <p className="rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-300">{error}</p>}
+      <InlineAlert variant="error">{error}</InlineAlert>
 
       {session.mode === 'interview' && (
         <InterviewOptionsPanel value={interviewOptions} onChange={setInterviewOptions} />
