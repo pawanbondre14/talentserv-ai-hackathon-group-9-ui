@@ -22,28 +22,28 @@ const features = [
     icon: Calendar,
     title: 'Meeting minutes',
     description:
-      'Executive summary, decisions, action items, risks, and follow-ups — structured from any transcript.',
+      'Executive summaries, decisions, action items, risks, and follow-ups—structured consistently from any transcript.',
     color: 'from-blue-500/25 to-indigo-600/10 border-indigo-500/30',
   },
   {
     icon: Users,
-    title: 'Interview feedback',
+    title: 'Interview assessments',
     description:
-      'Strengths, concerns, skill ratings, and hiring recommendations with optional JD and scorecard context.',
+      'Document strengths, concerns, competency ratings, and hiring recommendations with optional job description and scorecard context.',
     color: 'from-violet-500/25 to-purple-600/10 border-violet-500/30',
   },
   {
     icon: Cloud,
-    title: 'Teams & OneDrive',
+    title: 'Microsoft Teams & OneDrive',
     description:
-      'Import transcripts from your Recordings folder or try demo meetings while you connect Microsoft.',
+      'Import transcripts directly from your Recordings library via secure Microsoft OAuth integration.',
     color: 'from-cyan-500/20 to-blue-600/10 border-cyan-500/30',
   },
   {
     icon: FileText,
-    title: 'Export & edit',
+    title: 'Edit and export',
     description:
-      'Refine AI output in the app, then export to Markdown, PDF, or Word for stakeholders.',
+      'Refine generated content in the application, then export polished reports to Markdown, PDF, or Word.',
     color: 'from-emerald-500/20 to-teal-600/10 border-emerald-500/30',
   },
 ]
@@ -51,20 +51,20 @@ const features = [
 const steps = [
   {
     step: '01',
-    title: 'Bring your transcript',
-    detail: 'Paste text, upload a file, or import from Teams / OneDrive.',
+    title: 'Import your transcript',
+    detail: 'Upload a file, paste text, or import from Microsoft Teams and OneDrive.',
     icon: Upload,
   },
   {
     step: '02',
-    title: 'Run AI analysis',
-    detail: 'Choose meeting minutes or interview mode — Claude or OpenAI powers the output.',
+    title: 'Generate structured output',
+    detail: 'Select meeting minutes or interview assessment mode, powered by enterprise-grade AI models.',
     icon: Zap,
   },
   {
     step: '03',
-    title: 'Review & share',
-    detail: 'Edit sections, search past sessions, and export when you are ready.',
+    title: 'Review and distribute',
+    detail: 'Edit sections, search your session library, and export when ready for stakeholders.',
     icon: MessageSquare,
   },
 ]
@@ -73,7 +73,7 @@ export function Landing() {
   const { isLoaded, isSignedIn } = useAuth()
 
   if (!isLoaded) {
-    return <PageLoader message="Preparing MeetPilot…" />
+    return <PageLoader message="Loading MeetPilot AI…" />
   }
 
   if (isSignedIn) {
@@ -95,24 +95,24 @@ export function Landing() {
           <FadeIn>
             <span className="inline-flex items-center gap-2 rounded-full border border-indigo-500/30 bg-indigo-500/10 px-4 py-1.5 text-xs font-medium text-indigo-200">
               <Sparkles className="h-3.5 w-3.5" />
-              Turn talk into action with AI
+              AI-powered meeting intelligence
             </span>
           </FadeIn>
           <FadeIn delay={0.08}>
             <h1 className="mt-6 text-4xl font-bold tracking-tight text-white md:text-6xl md:leading-[1.1]">
-              Meeting notes &{' '}
+              Professional meeting documentation{' '}
               <span className="bg-gradient-to-r from-indigo-300 via-violet-300 to-indigo-400 bg-clip-text text-transparent">
-                interview feedback
+                and hiring insights
               </span>
               <br className="hidden sm:block" />
-              in minutes
+              from every conversation
             </h1>
           </FadeIn>
           <FadeIn delay={0.16}>
             <p className="mx-auto mt-6 max-w-2xl text-base leading-relaxed text-slate-400 md:text-lg">
-              MeetPilot AI transforms Teams transcripts, uploads, or pasted notes into structured
-              deliverables for your team or hiring pipeline. Sign in to save sessions, search
-              history, and export polished reports.
+              MeetPilot AI converts Microsoft Teams transcripts, file uploads, and pasted notes into
+              structured deliverables for collaboration and talent acquisition. Secure sign-in,
+              searchable session history, and export-ready reports for your organization.
             </p>
           </FadeIn>
           <FadeIn delay={0.24}>
@@ -121,7 +121,7 @@ export function Landing() {
                 to="/sign-up"
                 className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-6 py-3 text-sm font-semibold text-white shadow-xl shadow-indigo-500/30 transition-transform hover:scale-[1.02] hover:bg-indigo-500"
               >
-                Start free
+                Get started
                 <ArrowRight className="h-4 w-4" />
               </Link>
               <Link
@@ -136,12 +136,12 @@ export function Landing() {
             <p className="mt-6 flex flex-wrap items-center justify-center gap-4 text-xs text-slate-500">
               <span className="inline-flex items-center gap-1.5">
                 <Shield className="h-3.5 w-3.5 text-emerald-400" />
-                Clerk authentication
+                Secure authentication
               </span>
               <span>·</span>
-              <span>No password storage in this app</span>
+              <span>Enterprise-grade identity management</span>
               <span>·</span>
-              <span>Your transcripts stay in your workspace</span>
+              <span>Your data remains in your workspace</span>
             </p>
           </FadeIn>
         </section>
@@ -171,10 +171,10 @@ export function Landing() {
         <section className="py-12">
           <FadeIn>
             <h2 className="text-center text-2xl font-bold text-white md:text-3xl">
-              Everything you need after the call
+              A complete post-meeting workflow
             </h2>
             <p className="mx-auto mt-3 max-w-xl text-center text-sm text-slate-400">
-              Built for hackathon speed and real workflows — from sprint retros to candidate debriefs.
+              Designed for team meetings, sprint retrospectives, and structured hiring debriefs.
             </p>
           </FadeIn>
           <StaggerList className="mt-10 grid gap-5 sm:grid-cols-2">
@@ -195,16 +195,17 @@ export function Landing() {
 
         <FadeIn delay={0.1}>
           <section className="mt-8 overflow-hidden rounded-2xl border border-indigo-500/30 bg-gradient-to-br from-indigo-600/20 via-violet-600/10 to-transparent p-8 text-center md:p-12">
-            <h2 className="text-2xl font-bold text-white md:text-3xl">Ready to pilot your next meeting?</h2>
+            <h2 className="text-2xl font-bold text-white md:text-3xl">
+              Begin transforming your meetings today
+            </h2>
             <p className="mx-auto mt-3 max-w-md text-sm text-slate-300">
-              Create an account with email and password, then start your first session in under a
-              minute.
+              Create your account and process your first session in minutes.
             </p>
             <Link
               to="/sign-up"
               className="mt-8 inline-flex items-center gap-2 rounded-xl bg-white px-6 py-3 text-sm font-semibold text-indigo-900 transition-transform hover:scale-[1.02]"
             >
-              Create account
+              Create your account
               <ArrowRight className="h-4 w-4" />
             </Link>
           </section>
