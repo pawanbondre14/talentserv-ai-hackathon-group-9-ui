@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { ArrowLeft, Loader2, Sparkles, Save } from 'lucide-react'
 import { AutosaveIndicator } from '@/components/ui/AutosaveIndicator'
@@ -71,6 +71,11 @@ export function SessionDetail() {
   const [interviewOptions, setInterviewOptions] = useState<InterviewProcessOptions>(
     defaultInterviewOptions,
   )
+  const outputRef = useRef<MeetingMinutesOutput | InterviewFeedbackOutput | null>(null)
+
+  useEffect(() => {
+    outputRef.current = output
+  }, [output])
 
   const load = useCallback(async () => {
     if (!id) return
@@ -123,7 +128,9 @@ export function SessionDetail() {
     async (data: MeetingMinutesOutput | InterviewFeedbackOutput) => {
       if (!id) return
       await updateSessionOutput(api, id, data as unknown as Record<string, unknown>)
-      if (id) clearDraftBackup(id)
+      if (outputRef.current && JSON.stringify(outputRef.current) === JSON.stringify(data)) {
+        clearDraftBackup(id)
+      }
     },
     [api, id],
   )
