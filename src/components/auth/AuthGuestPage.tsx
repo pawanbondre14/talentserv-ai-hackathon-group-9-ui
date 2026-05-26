@@ -1,5 +1,5 @@
 import { useAuth } from '@clerk/clerk-react'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Navigate } from 'react-router-dom'
 
 /**
@@ -15,14 +15,29 @@ export function AuthGuestPage({
 }) {
   const { isLoaded, isSignedIn, signOut } = useAuth()
   const [signingOut, setSigningOut] = useState(false)
+  const mountedRef = useRef(true)
+  const needsSessionExpiredSignOut = Boolean(sessionExpired && isSignedIn)
+
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+    }
+  }, [])
 
   useEffect(() => {
     if (!isLoaded || !sessionExpired || !isSignedIn || signingOut) return
     setSigningOut(true)
-    signOut({ redirectUrl: window.location.pathname }).catch(() => setSigningOut(false))
+    void signOut({ redirectUrl: window.location.pathname })
+      .catch(() => undefined)
+      .finally(() => {
+        if (mountedRef.current) {
+          setSigningOut(false)
+        }
+      })
   }, [isLoaded, isSignedIn, sessionExpired, signOut, signingOut])
 
-  if (!isLoaded || signingOut) {
+  if (!isLoaded || signingOut || needsSessionExpiredSignOut) {
     return (
       <div className="flex min-h-screen items-center justify-center text-slate-400">
         Loading…
