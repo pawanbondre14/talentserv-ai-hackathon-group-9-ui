@@ -329,7 +329,7 @@ export function TeamsImportPanel({
                 className="shrink-0 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-500 disabled:opacity-50"
               >
                 {importingId === item.id ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
+                  runAi ? 'Working…' : <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
                   'Import'
                 )}

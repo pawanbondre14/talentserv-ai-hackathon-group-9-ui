@@ -250,11 +250,7 @@ export function SessionDetail() {
               disabled={processing || session.word_count < 50}
               className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500 disabled:opacity-50"
             >
-              {processing ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Sparkles className="h-4 w-4" />
-              )}
+              {!processing && <Sparkles className="h-4 w-4" />}
               {processing ? 'Processing…' : 'Generate with AI'}
             </button>
           )}

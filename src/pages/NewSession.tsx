@@ -213,43 +213,30 @@ export function NewSession() {
 
           {tab === 'upload' && (
             <div className="space-y-4">
-              {runAi && (loading || aiStatus !== 'idle') && (
+              {runAi && (loading || aiStatus !== 'idle') ? (
                 <AiStatusPanel
                   mode={mode}
                   status={loading ? 'processing' : aiStatus}
                 />
-              )}
-              {loading && !runAi && (
+              ) : loading ? (
                 <div className="flex items-center gap-2 rounded-lg border border-[var(--color-surface-border)] bg-black/20 px-4 py-3 text-sm text-slate-300">
                   <Loader2 className="h-4 w-4 animate-spin text-indigo-400" />
                   Uploading transcript…
                 </div>
+              ) : (
+                <label
+                  className="flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed border-[var(--color-surface-border)] bg-black/20 px-4 py-8 text-sm text-slate-400 hover:border-indigo-500/50"
+                >
+                  <Upload className="h-4 w-4" />
+                  Choose .txt transcript file
+                  <input
+                    type="file"
+                    accept=".txt,text/plain"
+                    className="hidden"
+                    onChange={handleFileUpload}
+                  />
+                </label>
               )}
-              <label
-                className={cn(
-                  'flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed border-[var(--color-surface-border)] bg-black/20 px-4 py-8 text-sm text-slate-400 hover:border-indigo-500/50',
-                  loading && 'pointer-events-none opacity-60',
-                )}
-              >
-                {loading ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin text-indigo-400" />
-                    {runAi ? 'Uploading & generating…' : 'Uploading…'}
-                  </>
-                ) : (
-                  <>
-                    <Upload className="h-4 w-4" />
-                    Choose .txt transcript file
-                  </>
-                )}
-                <input
-                  type="file"
-                  accept=".txt,text/plain"
-                  className="hidden"
-                  disabled={loading}
-                  onChange={handleFileUpload}
-                />
-              </label>
             </div>
           )}
 
@@ -287,8 +274,8 @@ export function NewSession() {
                 disabled={!canSubmit || loading}
                 className="flex w-full items-center justify-center gap-2 rounded-lg bg-indigo-600 py-2.5 text-sm font-semibold text-white hover:bg-indigo-500 disabled:opacity-50"
               >
-                {loading && <Loader2 className="h-4 w-4 animate-spin" />}
-                {runAi ? 'Save & generate' : 'Save draft'}
+                {loading && !runAi && <Loader2 className="h-4 w-4 animate-spin" />}
+                {loading && runAi ? 'Generating…' : runAi ? 'Save & generate' : 'Save draft'}
               </button>
             </form>
           )}
@@ -298,8 +285,9 @@ export function NewSession() {
               <input
                 type="checkbox"
                 checked={runAi}
+                disabled={loading}
                 onChange={(e) => setRunAi(e.target.checked)}
-                className="rounded border-slate-600 bg-black/30 text-indigo-600"
+                className="rounded border-slate-600 bg-black/30 text-indigo-600 disabled:opacity-50"
               />
               Generate AI output after import
             </label>
