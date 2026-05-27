@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
 import { Briefcase, Calendar, ChevronRight, MessageSquare, Users } from 'lucide-react'
+import { DashboardStats } from '@/components/dashboard/DashboardStats'
 import { RecentSessions } from '@/components/dashboard/RecentSessions'
 import { Card } from '@/components/ui/Card'
 import { FadeIn, StaggerItem, StaggerList } from '@/components/ui/FadeIn'
@@ -50,6 +51,10 @@ export function Dashboard() {
           Turn Teams transcripts, uploads, or pasted notes into structured meeting minutes or
           interview feedback. Paste a transcript, run AI, edit results, and export.
         </p>
+      </FadeIn>
+
+      <FadeIn delay={0.06}>
+        <DashboardStats />
       </FadeIn>
 
       <StaggerList className="grid gap-4 md:grid-cols-2">

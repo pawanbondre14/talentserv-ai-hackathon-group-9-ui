@@ -134,6 +134,23 @@ export interface SessionListResponse {
   query: string | null
 }
 
+export interface SessionStats {
+  total: number
+  draft: number
+  processing: number
+  ready: number
+  error: number
+  meeting: number
+  interview: number
+  with_output: number
+  total_words: number
+}
+
+export async function fetchSessionStats(client: AxiosInstance) {
+  const { data } = await client.get<SessionStats>('/api/sessions/stats')
+  return data
+}
+
 export async function fetchSessions(
   client: AxiosInstance,
   params?: { q?: string; mode?: string; status?: string; offset?: number; limit?: number },

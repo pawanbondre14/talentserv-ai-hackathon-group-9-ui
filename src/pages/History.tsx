@@ -1,6 +1,6 @@
 import { useAuth } from '@clerk/clerk-react'
 import { useCallback, useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { Calendar, FileCheck, Search, Trash2, Users } from 'lucide-react'
 import { Card } from '@/components/ui/Card'
@@ -20,7 +20,7 @@ import { cn } from '@/lib/utils'
 const PAGE_SIZE = 15
 
 type ModeFilter = 'all' | 'meeting' | 'interview'
-type StatusFilter = 'all' | 'draft' | 'ready' | 'error'
+type StatusFilter = 'all' | 'draft' | 'processing' | 'ready' | 'error'
 
 function statusColor(status: string) {
   switch (status) {
@@ -35,12 +35,29 @@ function statusColor(status: string) {
   }
 }
 
+function parseStatusFilter(value: string | null): StatusFilter {
+  if (value === 'draft' || value === 'ready' || value === 'error' || value === 'processing') {
+    return value
+  }
+  return 'all'
+}
+
+function parseModeFilter(value: string | null): ModeFilter {
+  if (value === 'meeting' || value === 'interview') return value
+  return 'all'
+}
+
 export function History() {
   const api = useApi()
   const { isLoaded, isSignedIn } = useAuth()
+  const [searchParams] = useSearchParams()
   const [query, setQuery] = useState('')
-  const [modeFilter, setModeFilter] = useState<ModeFilter>('all')
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
+  const [modeFilter, setModeFilter] = useState<ModeFilter>(() =>
+    parseModeFilter(searchParams.get('mode')),
+  )
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>(() =>
+    parseStatusFilter(searchParams.get('status')),
+  )
   const [items, setItems] = useState<SessionListItem[]>([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
@@ -145,7 +162,7 @@ export function History() {
       </div>
 
       <div className="flex flex-wrap gap-2">
-        {(['all', 'draft', 'ready', 'error'] as const).map((s) => (
+        {(['all', 'draft', 'processing', 'ready', 'error'] as const).map((s) => (
           <button
             key={s}
             type="button"
