@@ -16,6 +16,7 @@ import {
   Trash2,
   User,
 } from 'lucide-react'
+import { formatListEntry } from '@/lib/normalizeOutput'
 import type { ActionItem, Decision, MeetingMinutesOutput } from '@/lib/types'
 import { Card } from '@/components/ui/Card'
 import { cn } from '@/lib/utils'
@@ -395,13 +396,15 @@ function ListEditor({
   addLabel: string
   onChange: (items: string[]) => void
 }) {
-  const displayItems = items.length ? items : ['']
+  const normalized = (items.length ? items : ['']).map((item) =>
+    typeof item === 'string' ? item : formatListEntry(item),
+  )
 
   return (
     <>
       {!items.length && <EmptyHint label={emptyLabel} />}
       <ul className="mt-3 space-y-2">
-        {displayItems.map((item, i) => (
+        {normalized.map((item, i) => (
           <li key={i} className="flex items-center gap-2">
             <div className="relative min-w-0 flex-1">
               <Icon
@@ -412,7 +415,7 @@ function ListEditor({
                 value={item}
                 placeholder={`Enter ${addLabel.replace(/^Add /i, '').toLowerCase()}…`}
                 onChange={(e) => {
-                  const next = [...(items.length ? items : [''])]
+                  const next = [...normalized]
                   next[i] = e.target.value
                   onChange(next)
                 }}
@@ -421,12 +424,12 @@ function ListEditor({
             </div>
             <RemoveButton
               label={`Remove ${addLabel.replace(/^Add /i, '').toLowerCase()} ${i + 1}`}
-              onClick={() => onChange(removeAtIndex(items, displayItems, i))}
+              onClick={() => onChange(removeAtIndex(items, normalized, i))}
             />
           </li>
         ))}
       </ul>
-      <AddButton label={addLabel} onClick={() => onChange([...displayItems, ''])} />
+      <AddButton label={addLabel} onClick={() => onChange([...normalized, ''])} />
     </>
   )
 }

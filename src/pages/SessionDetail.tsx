@@ -29,6 +29,7 @@ import {
   type InterviewProcessOptions,
   type SessionWithOutput,
 } from '@/lib/api'
+import { normalizeInterviewOutput, normalizeMeetingOutput } from '@/lib/normalizeOutput'
 import type { InterviewFeedbackOutput, MeetingMinutesOutput } from '@/lib/types'
 
 const emptyMeeting = (): MeetingMinutesOutput => ({
@@ -91,11 +92,25 @@ export function SessionDetail() {
     const draft = id ? loadDraftBackup<MeetingMinutesOutput | InterviewFeedbackOutput>(id) : null
     const raw = data.output?.edited_json ?? data.output?.ai_json
     if (draft && data.status === 'ready') {
-      setOutput(draft)
+      setOutput(
+        data.mode === 'meeting'
+          ? normalizeMeetingOutput(draft as MeetingMinutesOutput)
+          : normalizeInterviewOutput(draft as InterviewFeedbackOutput),
+      )
     } else if (raw && data.mode === 'meeting') {
-      setOutput({ ...emptyMeeting(), ...(raw as unknown as MeetingMinutesOutput) })
+      setOutput(
+        normalizeMeetingOutput({
+          ...emptyMeeting(),
+          ...(raw as unknown as MeetingMinutesOutput),
+        }),
+      )
     } else if (raw && data.mode === 'interview') {
-      setOutput({ ...emptyInterview(), ...(raw as unknown as InterviewFeedbackOutput) })
+      setOutput(
+        normalizeInterviewOutput({
+          ...emptyInterview(),
+          ...(raw as unknown as InterviewFeedbackOutput),
+        }),
+      )
     } else {
       setOutput(null)
     }
@@ -125,10 +140,14 @@ export function SessionDetail() {
   const saveOutput = useCallback(
     async (data: MeetingMinutesOutput | InterviewFeedbackOutput) => {
       if (!id) return
-      await updateSessionOutput(api, id, data as unknown as Record<string, unknown>)
+      const normalized =
+        session?.mode === 'interview'
+          ? normalizeInterviewOutput(data as InterviewFeedbackOutput)
+          : normalizeMeetingOutput(data as MeetingMinutesOutput)
+      await updateSessionOutput(api, id, normalized as unknown as Record<string, unknown>)
       if (id) clearDraftBackup(id)
     },
-    [api, id],
+    [api, id, session?.mode],
   )
 
   const autosaveStatus = useAutosave(
@@ -164,9 +183,15 @@ export function SessionDetail() {
       })
       const raw = result.output.edited_json ?? result.output.ai_json
       if (session?.mode === 'interview' || result.session.mode === 'interview') {
-        setOutput((raw as unknown as InterviewFeedbackOutput) || emptyInterview())
+        setOutput(
+          normalizeInterviewOutput(
+            (raw as unknown as InterviewFeedbackOutput) || emptyInterview(),
+          ),
+        )
       } else {
-        setOutput((raw as unknown as MeetingMinutesOutput) || emptyMeeting())
+        setOutput(
+          normalizeMeetingOutput((raw as unknown as MeetingMinutesOutput) || emptyMeeting()),
+        )
       }
     } catch (err: unknown) {
       setAiStatus('error')
