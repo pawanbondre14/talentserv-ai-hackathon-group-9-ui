@@ -1,5 +1,7 @@
 # Multi-Agent Transcript Analysis Plan (MeetPilot / HackFeed)
 
+**Submission references:** [Architecture (LangGraph diagram)](./docs/submissions/03-PRODUCT_TECHNICAL_ARCHITECTURE.md#langgraph-ai-pipeline) · [02-SOLUTION_IMPLEMENTATION_PLAN.md — Phase 2.5](./docs/submissions/02-SOLUTION_IMPLEMENTATION_PLAN.md) · [06-AGENTIC_CODING_EVIDENCE.md](./docs/submissions/06-AGENTIC_CODING_EVIDENCE.md)
+
 **Goal**: Analyze meeting and interview transcripts with higher accuracy, lower cost, and predictable latency by splitting work across specialized agents orchestrated with **LangGraph** from day one.
 
 **Context**: Phase 2 today uses a single OpenAI call in `app/services/llm.py`. This plan replaces ad-hoc orchestration with **LangGraph `StateGraph`s** wired into `POST /api/sessions/{id}/process` — not a later refactor.

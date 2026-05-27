@@ -1,5 +1,7 @@
 # HackFeed: Meeting Feedback Generator - Project Plan
 
+**Submission pack:** [docs/submissions/README.md](./docs/submissions/README.md) · Groomed requirements: [01-GROOMED_REQUIREMENTS.md](./docs/submissions/01-GROOMED_REQUIREMENTS.md) · Implementation summary: [02-SOLUTION_IMPLEMENTATION_PLAN.md](./docs/submissions/02-SOLUTION_IMPLEMENTATION_PLAN.md)
+
 **Challenge**: Challenge 7: Meeting Feedback Generator  
 **Architecture**: Python FastAPI Backend + React/Vite Frontend  
 **Deployment**: Backend → Render/Railway, Frontend → Vercel
