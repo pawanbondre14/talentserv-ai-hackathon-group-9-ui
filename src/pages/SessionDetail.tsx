@@ -233,14 +233,16 @@ export function SessionDetail() {
               <AutosaveIndicator status={autosaveStatus} />
             </div>
           )}
-          <div className="mt-3">
-            <AiStatusPanel
-              mode={session.mode}
-              status={aiStatus}
-              provider={aiProvider}
-              truncated={aiTruncated}
-            />
-          </div>
+          {(processing || aiStatus !== 'idle') && (
+            <div className="mt-3">
+              <AiStatusPanel
+                mode={session.mode}
+                status={processing ? 'processing' : aiStatus}
+                provider={aiProvider}
+                truncated={aiTruncated}
+              />
+            </div>
+          )}
         </div>
         <div className="flex flex-wrap gap-2">
           {!hasOutput && (
@@ -280,7 +282,7 @@ export function SessionDetail() {
 
       <InlineAlert variant="error">{error}</InlineAlert>
 
-      {session.mode === 'interview' && (
+      {session.mode === 'interview' && !processing && (
         <InterviewOptionsPanel value={interviewOptions} onChange={setInterviewOptions} />
       )}
 

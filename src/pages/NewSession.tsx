@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Loader2, Upload } from 'lucide-react'
 import { FadeIn } from '@/components/ui/FadeIn'
-import { AiStatusPanel, saveAiMeta, type AiRunStatus } from '@/components/output/AiStatusBadge'
+import { AiStatusPanel, saveAiMeta } from '@/components/output/AiStatusBadge'
 import { TeamsImportPanel } from '@/components/teams/TeamsImportPanel'
 import { Card } from '@/components/ui/Card'
 import { InlineAlert } from '@/components/ui/InlineAlert'
@@ -36,7 +36,8 @@ export function NewSession() {
   const [transcript, setTranscript] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
-  const [aiStatus, setAiStatus] = useState<AiRunStatus>('idle')
+  /** Tab that started the current upload/paste operation — avoids showing status on other tabs/modes */
+  const [busyTab, setBusyTab] = useState<InputTab | null>(null)
   const [runAi, setRunAi] = useState(true)
   const [interviewOptions, setInterviewOptions] = useState<InterviewProcessOptions>(
     defaultInterviewOptions,
@@ -67,8 +68,8 @@ export function NewSession() {
   async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
+    setBusyTab('upload')
     setLoading(true)
-    setAiStatus(runAi ? 'processing' : 'idle')
     setError(null)
     try {
       const session = await uploadTranscriptFile(api, file, mode, title.trim() || undefined)
@@ -86,10 +87,10 @@ export function NewSession() {
       }
       navigate(`/session/${session.id}`)
     } catch (err: unknown) {
-      setAiStatus('error')
       setError(getApiErrorMessage(err, 'Upload failed.'))
     } finally {
       setLoading(false)
+      setBusyTab(null)
       e.target.value = ''
     }
   }
@@ -97,8 +98,8 @@ export function NewSession() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!canSubmit) return
+    setBusyTab('paste')
     setLoading(true)
-    setAiStatus(runAi ? 'processing' : 'idle')
     setError(null)
     try {
       const session = await createSession(api, {
@@ -121,7 +122,6 @@ export function NewSession() {
       }
       navigate(`/session/${session.id}`)
     } catch (err: unknown) {
-      setAiStatus('error')
       setError(
         getApiErrorMessage(
           err,
@@ -130,6 +130,7 @@ export function NewSession() {
       )
     } finally {
       setLoading(false)
+      setBusyTab(null)
     }
   }
 
@@ -150,8 +151,10 @@ export function NewSession() {
               <button
                 key={m}
                 type="button"
+                disabled={loading}
                 onClick={() => setMode(m)}
                 className={cn(
+                  loading && 'cursor-not-allowed opacity-60',
                   'flex-1 rounded-md py-2 text-sm font-medium capitalize transition-colors',
                   mode === m
                     ? 'bg-indigo-600 text-white'
@@ -184,9 +187,15 @@ export function NewSession() {
               <button
                 key={key}
                 type="button"
-                onClick={() => setTab(key)}
+                disabled={loading}
+                onClick={() => {
+                  if (loading) return
+                  setTab(key)
+                  setError(null)
+                }}
                 className={cn(
                   'px-3 py-2 text-sm font-medium',
+                  loading && 'cursor-not-allowed opacity-60',
                   tab === key
                     ? 'border-b-2 border-indigo-500 text-white'
                     : 'text-slate-500 hover:text-slate-300',
@@ -197,7 +206,7 @@ export function NewSession() {
             ))}
           </div>
 
-          {mode === 'interview' && (
+          {mode === 'interview' && !loading && (
             <InterviewOptionsPanel value={interviewOptions} onChange={setInterviewOptions} />
           )}
 
@@ -213,25 +222,27 @@ export function NewSession() {
 
           {tab === 'upload' && (
             <div className="space-y-4">
-              {runAi && (loading || aiStatus !== 'idle') ? (
-                <AiStatusPanel
-                  mode={mode}
-                  status={loading ? 'processing' : aiStatus}
-                />
-              ) : loading ? (
+              {error && (
+                <InlineAlert variant="error">{error}</InlineAlert>
+              )}
+              {runAi && loading && busyTab === 'upload' && (
+                <AiStatusPanel mode={mode} status="processing" />
+              )}
+              {!runAi && loading && (
                 <div className="flex items-center gap-2 rounded-lg border border-[var(--color-surface-border)] bg-black/20 px-4 py-3 text-sm text-slate-300">
                   <Loader2 className="h-4 w-4 animate-spin text-indigo-400" />
                   Uploading transcript…
                 </div>
-              ) : (
+              )}
+              {!loading && (
                 <label
-                  className="flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed border-[var(--color-surface-border)] bg-black/20 px-4 py-8 text-sm text-slate-400 hover:border-indigo-500/50"
+                  className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-[var(--color-surface-border)] bg-black/20 px-4 py-8 text-sm text-slate-400 hover:border-indigo-500/50"
                 >
                   <Upload className="h-4 w-4" />
-                  Choose .txt transcript file
+                  {error ? 'Choose another .txt or .vtt file' : 'Choose .txt or .vtt transcript file'}
                   <input
                     type="file"
-                    accept=".txt,text/plain"
+                    accept=".txt,.vtt,text/plain"
                     className="hidden"
                     onChange={handleFileUpload}
                   />
@@ -265,8 +276,8 @@ export function NewSession() {
                 Generate AI output immediately after saving
               </label>
 
-              {runAi && (loading || aiStatus !== 'idle') && (
-                <AiStatusPanel mode={mode} status={loading ? 'processing' : aiStatus} />
+              {runAi && loading && busyTab === 'paste' && (
+                <AiStatusPanel mode={mode} status="processing" />
               )}
 
               <button
@@ -293,7 +304,7 @@ export function NewSession() {
             </label>
           )}
 
-          {error && tab !== 'teams' && <InlineAlert variant="error">{error}</InlineAlert>}
+          {error && tab === 'paste' && <InlineAlert variant="error">{error}</InlineAlert>}
         </div>
       </Card>
       </FadeIn>
