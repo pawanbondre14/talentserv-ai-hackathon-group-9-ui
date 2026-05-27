@@ -147,7 +147,16 @@ export function SessionDetail() {
   }, [api, id])
 
   useEffect(() => {
-    load().catch(() => setError('Session not found or API unavailable.'))
+    let active = true
+    const timer = window.setTimeout(() => {
+      void load().catch(() => {
+        if (active) setError('Session not found or API unavailable.')
+      })
+    }, 0)
+    return () => {
+      active = false
+      window.clearTimeout(timer)
+    }
   }, [load])
 
   const hasOutput = output !== null && session?.status === 'ready'
