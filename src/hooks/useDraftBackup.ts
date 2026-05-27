@@ -45,9 +45,8 @@ export function useDraftBackup(
 }
 
 function isDraftEnvelope<T>(value: unknown): value is DraftEnvelope<T> {
+  if (!value || typeof value !== 'object') return false
   return (
-    Boolean(value) &&
-    typeof value === 'object' &&
     (value as { marker?: unknown }).marker === DRAFT_MARKER &&
     (value as { version?: unknown }).version === DRAFT_VERSION &&
     'payload' in value
