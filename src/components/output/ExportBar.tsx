@@ -25,7 +25,7 @@ export function ExportBar({
     mode === 'meeting'
       ? meetingToMarkdown(data as MeetingMinutesOutput, title)
       : interviewToMarkdown(data as InterviewFeedbackOutput, title)
-  const safeName = title.replace(/[^\w\-]+/g, '_').slice(0, 40) || 'export'
+  const safeName = title.replace(/[^\w-]+/g, '_').slice(0, 40) || 'export'
 
   async function handleCopy() {
     await copyMarkdown(md)

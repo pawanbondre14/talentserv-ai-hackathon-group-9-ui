@@ -126,11 +126,22 @@ export function downloadPdf(title: string, body: string, filename: string) {
   const doc = new jsPDF({ unit: 'pt', format: 'a4' })
   const margin = 48
   const pageWidth = doc.internal.pageSize.getWidth() - margin * 2
+  const pageHeight = doc.internal.pageSize.getHeight()
+  const lineHeight = 14
   doc.setFontSize(16)
   doc.text(title, margin, margin)
   doc.setFontSize(10)
-  const split = doc.splitTextToSize(body, pageWidth)
-  doc.text(split, margin, margin + 24)
+  const lines = doc.splitTextToSize(body, pageWidth) as string[]
+  let y = margin + 24
+
+  for (const line of lines) {
+    if (y > pageHeight - margin) {
+      doc.addPage()
+      y = margin
+    }
+    doc.text(line, margin, y)
+    y += lineHeight
+  }
   doc.save(filename)
 }
 
