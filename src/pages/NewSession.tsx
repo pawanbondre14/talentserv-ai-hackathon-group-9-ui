@@ -1,9 +1,11 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Loader2, Upload } from 'lucide-react'
-import { AiStatusPanel, saveAiMeta, type AiRunStatus } from '@/components/output/AiStatusBadge'
+import { FadeIn } from '@/components/ui/FadeIn'
+import { AiStatusPanel, saveAiMeta } from '@/components/output/AiStatusBadge'
 import { TeamsImportPanel } from '@/components/teams/TeamsImportPanel'
 import { Card } from '@/components/ui/Card'
+import { InlineAlert } from '@/components/ui/InlineAlert'
 import { useApi } from '@/hooks/useApi'
 import {
   InterviewOptionsPanel,
@@ -16,20 +18,26 @@ import {
   type InterviewProcessOptions,
   uploadTranscriptFile,
 } from '@/lib/api'
+import { getOAuthMessage } from '@/lib/messages'
 import { cn } from '@/lib/utils'
 
 type InputTab = 'paste' | 'upload' | 'teams'
 
 export function NewSession() {
-  const [params] = useSearchParams()
+  const [params, setParams] = useSearchParams()
   const initialMode = params.get('mode') === 'interview' ? 'interview' : 'meeting'
   const [mode, setMode] = useState<'meeting' | 'interview'>(initialMode)
-  const [tab, setTab] = useState<InputTab>('paste')
+  const [tab, setTab] = useState<InputTab>(() =>
+    params.get('teams') ? 'teams' : 'paste',
+  )
+  const [teamsNotice, setTeamsNotice] = useState<string | null>(null)
+  const [teamsError, setTeamsError] = useState<string | null>(null)
   const [title, setTitle] = useState('')
   const [transcript, setTranscript] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
-  const [aiStatus, setAiStatus] = useState<AiRunStatus>('idle')
+  /** Tab that started the current upload/paste operation — avoids showing status on other tabs/modes */
+  const [busyTab, setBusyTab] = useState<InputTab | null>(null)
   const [runAi, setRunAi] = useState(true)
   const [interviewOptions, setInterviewOptions] = useState<InterviewProcessOptions>(
     defaultInterviewOptions,
@@ -37,14 +45,31 @@ export function NewSession() {
   const api = useApi()
   const navigate = useNavigate()
 
+  useEffect(() => {
+    const teams = params.get('teams')
+    const message = params.get('message')
+    if (teams === 'connected') {
+      setTab('teams')
+      setTeamsNotice(getOAuthMessage(message, 'connected'))
+      setTeamsError(null)
+      setParams({}, { replace: true })
+    }
+    if (teams === 'error') {
+      setTab('teams')
+      setTeamsError(getOAuthMessage(message, 'error'))
+      setTeamsNotice(null)
+      setParams({}, { replace: true })
+    }
+  }, [params, setParams])
+
   const wordCount = transcript.trim() ? transcript.trim().split(/\s+/).length : 0
   const canSubmit = wordCount >= 50
 
   async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
+    setBusyTab('upload')
     setLoading(true)
-    setAiStatus(runAi ? 'processing' : 'idle')
     setError(null)
     try {
       const session = await uploadTranscriptFile(api, file, mode, title.trim() || undefined)
@@ -62,10 +87,10 @@ export function NewSession() {
       }
       navigate(`/session/${session.id}`)
     } catch (err: unknown) {
-      setAiStatus('error')
       setError(getApiErrorMessage(err, 'Upload failed.'))
     } finally {
       setLoading(false)
+      setBusyTab(null)
       e.target.value = ''
     }
   }
@@ -73,8 +98,8 @@ export function NewSession() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!canSubmit) return
+    setBusyTab('paste')
     setLoading(true)
-    setAiStatus(runAi ? 'processing' : 'idle')
     setError(null)
     try {
       const session = await createSession(api, {
@@ -97,7 +122,6 @@ export function NewSession() {
       }
       navigate(`/session/${session.id}`)
     } catch (err: unknown) {
-      setAiStatus('error')
       setError(
         getApiErrorMessage(
           err,
@@ -106,18 +130,20 @@ export function NewSession() {
       )
     } finally {
       setLoading(false)
+      setBusyTab(null)
     }
   }
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
-      <div>
+      <FadeIn>
         <h1 className="text-2xl font-bold text-white">New session</h1>
         <p className="mt-1 text-sm text-[var(--color-muted)]">
           Import from Teams / OneDrive, upload a file, or paste a transcript.
         </p>
-      </div>
+      </FadeIn>
 
+      <FadeIn delay={0.08}>
       <Card>
         <div className="space-y-5">
           <div className="flex gap-2 rounded-lg bg-black/30 p-1">
@@ -125,8 +151,10 @@ export function NewSession() {
               <button
                 key={m}
                 type="button"
+                disabled={loading}
                 onClick={() => setMode(m)}
                 className={cn(
+                  loading && 'cursor-not-allowed opacity-60',
                   'flex-1 rounded-md py-2 text-sm font-medium capitalize transition-colors',
                   mode === m
                     ? 'bg-indigo-600 text-white'
@@ -159,9 +187,15 @@ export function NewSession() {
               <button
                 key={key}
                 type="button"
-                onClick={() => setTab(key)}
+                disabled={loading}
+                onClick={() => {
+                  if (loading) return
+                  setTab(key)
+                  setError(null)
+                }}
                 className={cn(
                   'px-3 py-2 text-sm font-medium',
+                  loading && 'cursor-not-allowed opacity-60',
                   tab === key
                     ? 'border-b-2 border-indigo-500 text-white'
                     : 'text-slate-500 hover:text-slate-300',
@@ -172,7 +206,7 @@ export function NewSession() {
             ))}
           </div>
 
-          {mode === 'interview' && (
+          {mode === 'interview' && !loading && (
             <InterviewOptionsPanel value={interviewOptions} onChange={setInterviewOptions} />
           )}
 
@@ -181,48 +215,39 @@ export function NewSession() {
               mode={mode}
               runAi={runAi}
               interviewOptions={mode === 'interview' ? interviewOptions : undefined}
+              initialNotice={teamsNotice}
+              initialError={teamsError}
             />
           )}
 
           {tab === 'upload' && (
             <div className="space-y-4">
-              {runAi && (loading || aiStatus !== 'idle') && (
-                <AiStatusPanel
-                  mode={mode}
-                  status={loading ? 'processing' : aiStatus}
-                />
+              {error && (
+                <InlineAlert variant="error">{error}</InlineAlert>
               )}
-              {loading && !runAi && (
+              {runAi && loading && busyTab === 'upload' && (
+                <AiStatusPanel mode={mode} status="processing" />
+              )}
+              {!runAi && loading && (
                 <div className="flex items-center gap-2 rounded-lg border border-[var(--color-surface-border)] bg-black/20 px-4 py-3 text-sm text-slate-300">
                   <Loader2 className="h-4 w-4 animate-spin text-indigo-400" />
                   Uploading transcript…
                 </div>
               )}
-              <label
-                className={cn(
-                  'flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed border-[var(--color-surface-border)] bg-black/20 px-4 py-8 text-sm text-slate-400 hover:border-indigo-500/50',
-                  loading && 'pointer-events-none opacity-60',
-                )}
-              >
-                {loading ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin text-indigo-400" />
-                    {runAi ? 'Uploading & generating…' : 'Uploading…'}
-                  </>
-                ) : (
-                  <>
-                    <Upload className="h-4 w-4" />
-                    Choose .txt transcript file
-                  </>
-                )}
-                <input
-                  type="file"
-                  accept=".txt,text/plain"
-                  className="hidden"
-                  disabled={loading}
-                  onChange={handleFileUpload}
-                />
-              </label>
+              {!loading && (
+                <label
+                  className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-[var(--color-surface-border)] bg-black/20 px-4 py-8 text-sm text-slate-400 hover:border-indigo-500/50"
+                >
+                  <Upload className="h-4 w-4" />
+                  {error ? 'Choose another .txt or .vtt file' : 'Choose .txt or .vtt transcript file'}
+                  <input
+                    type="file"
+                    accept=".txt,.vtt,text/plain"
+                    className="hidden"
+                    onChange={handleFileUpload}
+                  />
+                </label>
+              )}
             </div>
           )}
 
@@ -251,8 +276,8 @@ export function NewSession() {
                 Generate AI output immediately after saving
               </label>
 
-              {runAi && (loading || aiStatus !== 'idle') && (
-                <AiStatusPanel mode={mode} status={loading ? 'processing' : aiStatus} />
+              {runAi && loading && busyTab === 'paste' && (
+                <AiStatusPanel mode={mode} status="processing" />
               )}
 
               <button
@@ -260,8 +285,8 @@ export function NewSession() {
                 disabled={!canSubmit || loading}
                 className="flex w-full items-center justify-center gap-2 rounded-lg bg-indigo-600 py-2.5 text-sm font-semibold text-white hover:bg-indigo-500 disabled:opacity-50"
               >
-                {loading && <Loader2 className="h-4 w-4 animate-spin" />}
-                {runAi ? 'Save & generate' : 'Save draft'}
+                {loading && !runAi && <Loader2 className="h-4 w-4 animate-spin" />}
+                {loading && runAi ? 'Generating…' : runAi ? 'Save & generate' : 'Save draft'}
               </button>
             </form>
           )}
@@ -271,18 +296,18 @@ export function NewSession() {
               <input
                 type="checkbox"
                 checked={runAi}
+                disabled={loading}
                 onChange={(e) => setRunAi(e.target.checked)}
-                className="rounded border-slate-600 bg-black/30 text-indigo-600"
+                className="rounded border-slate-600 bg-black/30 text-indigo-600 disabled:opacity-50"
               />
               Generate AI output after import
             </label>
           )}
 
-          {error && tab !== 'teams' && (
-            <p className="rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-300">{error}</p>
-          )}
+          {error && tab === 'paste' && <InlineAlert variant="error">{error}</InlineAlert>}
         </div>
       </Card>
+      </FadeIn>
     </div>
   )
 }

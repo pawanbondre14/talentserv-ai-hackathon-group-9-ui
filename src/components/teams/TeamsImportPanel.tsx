@@ -1,83 +1,134 @@
 import { useAuth } from '@clerk/clerk-react'
 import { useCallback, useEffect, useState } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
-import { Cloud, FlaskConical, Link2, Loader2, Unlink } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import {
+  ChevronRight,
+  Cloud,
+  FileText,
+  FlaskConical,
+  Folder,
+  Link2,
+  Loader2,
+  Unlink,
+} from 'lucide-react'
 import { AiStatusPanel, saveAiMeta } from '@/components/output/AiStatusBadge'
 import { Card } from '@/components/ui/Card'
+import { InlineAlert } from '@/components/ui/InlineAlert'
 import { useApi } from '@/hooks/useApi'
 import {
+  browseOneDriveFolder,
   disconnectMicrosoft,
-  fetchTeamsTranscripts,
   getMicrosoftAuthUrl,
   getMicrosoftStatus,
   getApiErrorMessage,
-  importTeamsTranscript,
+  importOneDriveFile,
   processSession,
   type InterviewProcessOptions,
-  type TeamsTranscriptListItem,
+  type OneDriveBrowseItem,
 } from '@/lib/api'
 import { cn } from '@/lib/utils'
+
+type FolderStackItem = { id: string; name: string }
+
+const MOCK_RECORDINGS_FOLDER_ID = 'mock-recordings'
 
 export function TeamsImportPanel({
   mode,
   runAi,
   interviewOptions,
+  initialNotice = null,
+  initialError = null,
 }: {
   mode: 'meeting' | 'interview'
   runAi: boolean
   interviewOptions?: InterviewProcessOptions
+  initialNotice?: string | null
+  initialError?: string | null
 }) {
   const api = useApi()
   const { isSignedIn, isLoaded } = useAuth()
   const navigate = useNavigate()
-  const [searchParams, setSearchParams] = useSearchParams()
-  const [items, setItems] = useState<TeamsTranscriptListItem[]>([])
+  const [items, setItems] = useState<OneDriveBrowseItem[]>([])
+  const [folderStack, setFolderStack] = useState<FolderStackItem[]>([
+    { id: 'root', name: 'OneDrive' },
+  ])
   const [integrationMode, setIntegrationMode] = useState('mock')
   const [msConnected, setMsConnected] = useState(false)
   const [azureConfigured, setAzureConfigured] = useState(false)
   const [loading, setLoading] = useState(true)
   const [importingId, setImportingId] = useState<string | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  const [notice, setNotice] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(initialError)
+  const [notice, setNotice] = useState<string | null>(initialNotice)
+  const [warning, setWarning] = useState<string | null>(null)
 
-  const load = useCallback(async () => {
-    setLoading(true)
-    setError(null)
-    try {
-      const [status, transcripts] = await Promise.all([
-        getMicrosoftStatus(api),
-        fetchTeamsTranscripts(api),
-      ])
-      setMsConnected(status.connected)
-      setAzureConfigured(status.azure_configured)
-      setIntegrationMode(transcripts.integration_mode)
-      setItems(transcripts.items)
-    } catch (err: unknown) {
-      setError(getApiErrorMessage(err, 'Could not load Teams transcripts.'))
-    } finally {
-      setLoading(false)
-    }
-  }, [api])
+  const currentFolder = folderStack[folderStack.length - 1]
 
   useEffect(() => {
-    load()
-  }, [load])
+    if (initialNotice) setNotice(initialNotice)
+  }, [initialNotice])
 
   useEffect(() => {
-    const teams = searchParams.get('teams')
-    if (teams === 'connected') {
-      setNotice('Microsoft account connected. You can import from OneDrive Recordings.')
-      setSearchParams({}, { replace: true })
-      load()
-    }
-    if (teams === 'error') {
-      setError('Microsoft sign-in failed or was cancelled.')
-      setSearchParams({}, { replace: true })
-    }
-  }, [searchParams, setSearchParams, load])
+    if (initialError) setError(initialError)
+  }, [initialError])
+
+  const loadFolder = useCallback(
+    async (folderId: string) => {
+      setLoading(true)
+      setError(null)
+      setWarning(null)
+      try {
+        const [status, browse] = await Promise.all([
+          getMicrosoftStatus(api),
+          browseOneDriveFolder(api, folderId),
+        ])
+        setMsConnected(status.connected)
+        setAzureConfigured(status.azure_configured)
+        setIntegrationMode(browse.integration_mode)
+        setItems(browse.items)
+
+        if (
+          status.connected &&
+          status.azure_configured &&
+          browse.integration_mode === 'mock'
+        ) {
+          setWarning(
+            'Could not load your OneDrive. Showing demo folders — try disconnecting and reconnecting Microsoft.',
+          )
+        }
+      } catch (err: unknown) {
+        setError(getApiErrorMessage(err, 'Could not load OneDrive folder.'))
+      } finally {
+        setLoading(false)
+      }
+    },
+    [api],
+  )
+
+  useEffect(() => {
+    loadFolder(currentFolder.id)
+  }, [loadFolder, currentFolder.id])
+
+  function openFolder(item: OneDriveBrowseItem) {
+    setFolderStack((prev) => [...prev, { id: item.id, name: item.name }])
+  }
+
+  function navigateToFolder(index: number) {
+    setFolderStack((prev) => prev.slice(0, index + 1))
+  }
+
+  function openRecordingsShortcut() {
+    setFolderStack([
+      { id: 'root', name: 'OneDrive' },
+      {
+        id: integrationMode === 'live' ? 'recordings' : MOCK_RECORDINGS_FOLDER_ID,
+        name: 'Recordings',
+      },
+    ])
+  }
 
   async function handleConnect() {
     setError(null)
+    setNotice(null)
     if (!isLoaded) return
     if (!isSignedIn) {
       setError('Sign in to MeetPilot AI first, then connect Microsoft.')
@@ -89,28 +140,37 @@ export function TeamsImportPanel({
       window.location.href = url
     } catch (err: unknown) {
       setError(
-        getApiErrorMessage(err, 'Connect is not available. Use demo meetings below.'),
+        getApiErrorMessage(err, 'Connect is not available. Use demo folders below.'),
       )
     }
   }
 
   async function handleDisconnect() {
-    await disconnectMicrosoft(api)
-    setMsConnected(false)
-    setNotice('Microsoft account disconnected.')
-    load()
+    setError(null)
+    setNotice(null)
+    try {
+      await disconnectMicrosoft(api)
+      setMsConnected(false)
+      setNotice('Microsoft account disconnected.')
+      setFolderStack([{ id: 'root', name: 'OneDrive' }])
+      await loadFolder('root')
+    } catch (err: unknown) {
+      setError(getApiErrorMessage(err, 'Could not disconnect Microsoft account.'))
+    }
   }
 
-  async function handleImport(item: TeamsTranscriptListItem) {
+  async function handleImport(item: OneDriveBrowseItem) {
     setImportingId(item.id)
     setError(null)
+    setNotice(null)
     try {
-      const source = item.source === 'onedrive' ? 'onedrive' : 'mock'
-      const { session } = await importTeamsTranscript(api, {
-        meeting_id: item.id,
+      const source = integrationMode === 'live' ? 'onedrive' : 'mock'
+      const { session } = await importOneDriveFile(api, {
+        item_id: item.id,
         source,
         mode,
-        title: item.title,
+        title: item.name.replace(/\.[^.]+$/, ''),
+        file_name: item.name,
       })
       if (runAi) {
         const result = await processSession(
@@ -126,7 +186,7 @@ export function TeamsImportPanel({
       }
       navigate(`/session/${session.id}`)
     } catch (err: unknown) {
-      setError(getApiErrorMessage(err, 'Import failed.'))
+      setError(getApiErrorMessage(err, 'Could not import this file.'))
     } finally {
       setImportingId(null)
     }
@@ -145,11 +205,11 @@ export function TeamsImportPanel({
         >
           {integrationMode === 'live' ? (
             <>
-              <Cloud className="h-3.5 w-3.5" /> Live — OneDrive / Teams
+              <Cloud className="h-3.5 w-3.5" /> Live — OneDrive
             </>
           ) : (
             <>
-              <FlaskConical className="h-3.5 w-3.5" /> Demo — sample meetings
+              <FlaskConical className="h-3.5 w-3.5" /> Demo — sample folders
             </>
           )}
         </span>
@@ -185,17 +245,44 @@ export function TeamsImportPanel({
 
       {!azureConfigured && (
         <p className="text-xs text-slate-500">
-          Azure app not configured on the server — demo meetings are shown. Production would use
-          Microsoft Graph API to read your OneDrive <strong>Recordings</strong> folder.
+          Azure app not configured on the server — demo folders are shown. Production uses
+          Microsoft Graph to browse your personal OneDrive for <strong>.txt</strong> and{' '}
+          <strong>.vtt</strong> files.
         </p>
       )}
 
-      {notice && (
-        <p className="rounded-lg bg-emerald-500/10 px-3 py-2 text-sm text-emerald-200">{notice}</p>
-      )}
-      {error && (
-        <p className="rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-300">{error}</p>
-      )}
+      <div className="flex flex-wrap items-center gap-2">
+        <nav className="flex flex-wrap items-center gap-1 text-sm text-slate-400">
+          {folderStack.map((folder, index) => (
+            <span key={folder.id} className="inline-flex items-center gap-1">
+              {index > 0 && <ChevronRight className="h-3.5 w-3.5 text-slate-600" />}
+              <button
+                type="button"
+                onClick={() => navigateToFolder(index)}
+                className={cn(
+                  'hover:text-white',
+                  index === folderStack.length - 1 && 'font-medium text-white',
+                )}
+              >
+                {folder.name}
+              </button>
+            </span>
+          ))}
+        </nav>
+        {currentFolder.id === 'root' && !msConnected && (
+          <button
+            type="button"
+            onClick={openRecordingsShortcut}
+            className="rounded-md border border-[var(--color-surface-border)] px-2 py-1 text-xs text-slate-300 hover:text-white"
+          >
+            Recordings shortcut
+          </button>
+        )}
+      </div>
+
+      <InlineAlert variant="success">{notice}</InlineAlert>
+      <InlineAlert variant="warning">{warning}</InlineAlert>
+      <InlineAlert variant="error">{error}</InlineAlert>
 
       {importingId && runAi && <AiStatusPanel mode={mode} status="processing" />}
       {importingId && !runAi && (
@@ -205,34 +292,55 @@ export function TeamsImportPanel({
         </div>
       )}
 
-      {loading && <p className="text-sm text-slate-500">Loading meetings…</p>}
+      {loading && <p className="text-sm text-slate-500">Loading folder…</p>}
 
       <div className="space-y-2">
         {items.map((item) => (
           <Card key={item.id} className="flex items-center justify-between gap-3 py-3">
-            <div className="min-w-0">
-              <p className="font-medium text-white">{item.title}</p>
-              <p className="mt-0.5 text-xs text-slate-500">
-                {item.source} · {item.file_name || 'transcript'} ·{' '}
-                {item.date ? new Date(item.date).toLocaleString() : '—'}
-              </p>
-            </div>
-            <button
-              type="button"
-              disabled={Boolean(importingId)}
-              onClick={() => handleImport(item)}
-              className="shrink-0 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-500 disabled:opacity-50"
-            >
-              {importingId === item.id ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
+            <div className="flex min-w-0 items-start gap-2">
+              {item.kind === 'folder' ? (
+                <Folder className="mt-0.5 h-4 w-4 shrink-0 text-amber-400" />
               ) : (
-                'Import'
+                <FileText className="mt-0.5 h-4 w-4 shrink-0 text-indigo-400" />
               )}
-            </button>
+              <div className="min-w-0">
+                <p className="truncate font-medium text-white">{item.name}</p>
+                <p className="mt-0.5 text-xs text-slate-500">
+                  {item.kind === 'folder'
+                    ? 'Folder'
+                    : `${item.extension || 'file'}${item.modified_at ? ` · ${new Date(item.modified_at).toLocaleString()}` : ''}`}
+                </p>
+              </div>
+            </div>
+            {item.kind === 'folder' ? (
+              <button
+                type="button"
+                disabled={Boolean(importingId)}
+                onClick={() => openFolder(item)}
+                className="shrink-0 rounded-lg border border-[var(--color-surface-border)] px-3 py-1.5 text-xs font-semibold text-slate-200 hover:text-white disabled:opacity-50"
+              >
+                Open
+              </button>
+            ) : (
+              <button
+                type="button"
+                disabled={Boolean(importingId)}
+                onClick={() => handleImport(item)}
+                className="shrink-0 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-500 disabled:opacity-50"
+              >
+                {importingId === item.id ? (
+                  runAi ? 'Working…' : <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  'Import'
+                )}
+              </button>
+            )}
           </Card>
         ))}
         {!loading && items.length === 0 && (
-          <p className="text-sm text-slate-500">No transcripts found in Recordings folder.</p>
+          <p className="text-sm text-slate-500">
+            No folders or transcript files (.txt, .vtt) in this folder.
+          </p>
         )}
       </div>
     </div>

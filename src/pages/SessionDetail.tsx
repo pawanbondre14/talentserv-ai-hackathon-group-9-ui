@@ -17,6 +17,7 @@ import {
   defaultInterviewOptions,
 } from '@/components/interview/InterviewOptionsPanel'
 import { FloatingSessionChat } from '@/components/chat/FloatingSessionChat'
+import { InlineAlert } from '@/components/ui/InlineAlert'
 import { InterviewOutputEditor } from '@/components/output/InterviewOutputEditor'
 import { MeetingOutputEditor } from '@/components/output/MeetingOutputEditor'
 import { useApi } from '@/hooks/useApi'
@@ -28,6 +29,7 @@ import {
   type InterviewProcessOptions,
   type SessionWithOutput,
 } from '@/lib/api'
+import { normalizeInterviewOutput, normalizeMeetingOutput } from '@/lib/normalizeOutput'
 import type { InterviewFeedbackOutput, MeetingMinutesOutput } from '@/lib/types'
 
 const emptyMeeting = (): MeetingMinutesOutput => ({
@@ -90,11 +92,25 @@ export function SessionDetail() {
     const draft = id ? loadDraftBackup<MeetingMinutesOutput | InterviewFeedbackOutput>(id) : null
     const raw = data.output?.edited_json ?? data.output?.ai_json
     if (draft && data.status === 'ready') {
-      setOutput(draft)
+      setOutput(
+        data.mode === 'meeting'
+          ? normalizeMeetingOutput(draft as MeetingMinutesOutput)
+          : normalizeInterviewOutput(draft as InterviewFeedbackOutput),
+      )
     } else if (raw && data.mode === 'meeting') {
-      setOutput({ ...emptyMeeting(), ...(raw as unknown as MeetingMinutesOutput) })
+      setOutput(
+        normalizeMeetingOutput({
+          ...emptyMeeting(),
+          ...(raw as unknown as MeetingMinutesOutput),
+        }),
+      )
     } else if (raw && data.mode === 'interview') {
-      setOutput({ ...emptyInterview(), ...(raw as unknown as InterviewFeedbackOutput) })
+      setOutput(
+        normalizeInterviewOutput({
+          ...emptyInterview(),
+          ...(raw as unknown as InterviewFeedbackOutput),
+        }),
+      )
     } else {
       setOutput(null)
     }
@@ -114,7 +130,9 @@ export function SessionDetail() {
   }, [api, id])
 
   useEffect(() => {
-    load().catch(() => setError('Session not found or API unavailable.'))
+    load().catch((err: unknown) =>
+      setError(getApiErrorMessage(err, 'Session not found or could not be loaded.')),
+    )
   }, [load])
 
   const hasOutput = output !== null && session?.status === 'ready'
@@ -122,10 +140,14 @@ export function SessionDetail() {
   const saveOutput = useCallback(
     async (data: MeetingMinutesOutput | InterviewFeedbackOutput) => {
       if (!id) return
-      await updateSessionOutput(api, id, data as unknown as Record<string, unknown>)
+      const normalized =
+        session?.mode === 'interview'
+          ? normalizeInterviewOutput(data as InterviewFeedbackOutput)
+          : normalizeMeetingOutput(data as MeetingMinutesOutput)
+      await updateSessionOutput(api, id, normalized as unknown as Record<string, unknown>)
       if (id) clearDraftBackup(id)
     },
-    [api, id],
+    [api, id, session?.mode],
   )
 
   const autosaveStatus = useAutosave(
@@ -161,18 +183,19 @@ export function SessionDetail() {
       })
       const raw = result.output.edited_json ?? result.output.ai_json
       if (session?.mode === 'interview' || result.session.mode === 'interview') {
-        setOutput((raw as unknown as InterviewFeedbackOutput) || emptyInterview())
+        setOutput(
+          normalizeInterviewOutput(
+            (raw as unknown as InterviewFeedbackOutput) || emptyInterview(),
+          ),
+        )
       } else {
-        setOutput((raw as unknown as MeetingMinutesOutput) || emptyMeeting())
+        setOutput(
+          normalizeMeetingOutput((raw as unknown as MeetingMinutesOutput) || emptyMeeting()),
+        )
       }
     } catch (err: unknown) {
       setAiStatus('error')
-      setError(
-        getApiErrorMessage(
-          err,
-          'Processing failed. Check API keys or set LLM_MOCK=true.',
-        ),
-      )
+      setError(getApiErrorMessage(err, 'AI processing failed. Try again in a moment.'))
     } finally {
       setProcessing(false)
     }
@@ -186,8 +209,8 @@ export function SessionDetail() {
       await saveOutput(output)
       setSaveOk(true)
       setTimeout(() => setSaveOk(false), 2000)
-    } catch {
-      setError('Failed to save changes.')
+    } catch (err: unknown) {
+      setError(getApiErrorMessage(err, 'Could not save changes.'))
     } finally {
       setSaving(false)
     }
@@ -196,7 +219,7 @@ export function SessionDetail() {
   if (error && !session) {
     return (
       <div className="mx-auto max-w-3xl">
-        <p className="text-red-300">{error}</p>
+        <InlineAlert variant="error">{error}</InlineAlert>
         <Link to="/history" className="mt-4 inline-block text-sm text-indigo-400">
           Back to history
         </Link>
@@ -205,7 +228,13 @@ export function SessionDetail() {
   }
 
   if (!session) {
-    return <p className="text-slate-500">Loading session…</p>
+    return (
+      <div className="mx-auto max-w-3xl space-y-4">
+        <div className="h-8 w-48 animate-pulse rounded-lg bg-white/10" />
+        <div className="h-64 animate-pulse rounded-xl bg-white/5" />
+        <p className="text-center text-sm text-slate-500">Loading session…</p>
+      </div>
+    )
   }
 
   return (
@@ -229,14 +258,16 @@ export function SessionDetail() {
               <AutosaveIndicator status={autosaveStatus} />
             </div>
           )}
-          <div className="mt-3">
-            <AiStatusPanel
-              mode={session.mode}
-              status={aiStatus}
-              provider={aiProvider}
-              truncated={aiTruncated}
-            />
-          </div>
+          {(processing || aiStatus !== 'idle') && (
+            <div className="mt-3">
+              <AiStatusPanel
+                mode={session.mode}
+                status={processing ? 'processing' : aiStatus}
+                provider={aiProvider}
+                truncated={aiTruncated}
+              />
+            </div>
+          )}
         </div>
         <div className="flex flex-wrap gap-2">
           {!hasOutput && (
@@ -246,11 +277,7 @@ export function SessionDetail() {
               disabled={processing || session.word_count < 50}
               className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500 disabled:opacity-50"
             >
-              {processing ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Sparkles className="h-4 w-4" />
-              )}
+              {!processing && <Sparkles className="h-4 w-4" />}
               {processing ? 'Processing…' : 'Generate with AI'}
             </button>
           )}
@@ -278,9 +305,9 @@ export function SessionDetail() {
         </div>
       </div>
 
-      {error && <p className="rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-300">{error}</p>}
+      <InlineAlert variant="error">{error}</InlineAlert>
 
-      {session.mode === 'interview' && (
+      {session.mode === 'interview' && !processing && (
         <InterviewOptionsPanel value={interviewOptions} onChange={setInterviewOptions} />
       )}
 

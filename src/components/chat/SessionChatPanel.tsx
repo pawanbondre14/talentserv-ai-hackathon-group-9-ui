@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Loader2, Send, Trash2 } from 'lucide-react'
+import { InlineAlert } from '@/components/ui/InlineAlert'
 import { useApi } from '@/hooks/useApi'
 import {
   clearSessionChat,
@@ -200,7 +201,9 @@ export function SessionChatContent({
         </button>
       </form>
 
-      {error && <p className="mt-2 shrink-0 text-sm text-red-300">{error}</p>}
+      <InlineAlert variant="error" className="mt-2 shrink-0">
+        {error}
+      </InlineAlert>
     </div>
   )
 }

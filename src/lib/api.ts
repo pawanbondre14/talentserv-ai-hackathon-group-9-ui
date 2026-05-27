@@ -2,6 +2,7 @@ import axios, {
   type AxiosInstance,
   type InternalAxiosRequestConfig,
 } from 'axios'
+import { getStatusFallback, parseApiDetail } from '@/lib/messages'
 
 const baseURL = import.meta.env.VITE_API_URL ?? 'http://localhost:8000'
 
@@ -16,14 +17,28 @@ export function getApiErrorMessage(err: unknown, fallback: string): string {
   if (isSessionExpiredError(err)) {
     return 'Your session expired. Please sign in again.'
   }
+  if (axios.isAxiosError(err)) {
+    const status = err.response?.status
+    if (status === 401) {
+      return 'Your session expired. Please sign in again.'
+    }
+    const detail = parseApiDetail(err.response?.data?.detail)
+    if (detail) return detail
+    if (!err.response) {
+      return getStatusFallback(undefined, 'Network error. Check your connection and try again.')
+    }
+    return getStatusFallback(status, fallback)
+  }
   if (err && typeof err === 'object' && 'response' in err) {
     const status = (err as { response?: { status?: number } }).response?.status
     if (status === 401) {
       return 'Your session expired. Please sign in again.'
     }
-    const detail = (err as { response?: { data?: { detail?: string } } }).response?.data
-      ?.detail
-    if (detail) return String(detail)
+    const detail = parseApiDetail(
+      (err as { response?: { data?: { detail?: unknown } } }).response?.data?.detail,
+    )
+    if (detail) return detail
+    return getStatusFallback(status, fallback)
   }
   return fallback
 }
@@ -117,6 +132,23 @@ export interface SessionListResponse {
   items: SessionListItem[]
   total: number
   query: string | null
+}
+
+export interface SessionStats {
+  total: number
+  draft: number
+  processing: number
+  ready: number
+  error: number
+  meeting: number
+  interview: number
+  with_output: number
+  total_words: number
+}
+
+export async function fetchSessionStats(client: AxiosInstance) {
+  const { data } = await client.get<SessionStats>('/api/sessions/stats')
+  return data
 }
 
 export async function fetchSessions(
@@ -327,6 +359,53 @@ export async function importTeamsTranscript(
 ) {
   const { data } = await client.post<{ session: SessionDetail; word_count: number }>(
     '/api/teams/import',
+    body,
+  )
+  return data
+}
+
+export interface OneDriveBrowseItem {
+  id: string
+  name: string
+  kind: 'folder' | 'file'
+  size: number | null
+  modified_at: string | null
+  extension: string | null
+}
+
+export interface OneDriveBrowseResponse {
+  folder_id: string
+  folder_name: string
+  breadcrumb: { id: string; name: string }[]
+  items: OneDriveBrowseItem[]
+  integration_mode: string
+  microsoft_connected: boolean
+}
+
+export async function browseOneDriveFolder(client: AxiosInstance, folderId = 'root') {
+  const { data } = await client.get<OneDriveBrowseResponse>('/api/onedrive/browse', {
+    params: { folder_id: folderId },
+  })
+  return data
+}
+
+export async function fetchOneDriveRecordings(client: AxiosInstance) {
+  const { data } = await client.get<TeamsTranscriptListResponse>('/api/onedrive/recordings')
+  return data
+}
+
+export async function importOneDriveFile(
+  client: AxiosInstance,
+  body: {
+    item_id: string
+    source?: 'mock' | 'onedrive'
+    mode: 'meeting' | 'interview'
+    title?: string
+    file_name?: string
+  },
+) {
+  const { data } = await client.post<{ session: SessionDetail; word_count: number }>(
+    '/api/onedrive/import',
     body,
   )
   return data

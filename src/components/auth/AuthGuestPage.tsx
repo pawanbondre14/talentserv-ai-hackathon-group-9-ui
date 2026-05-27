@@ -1,6 +1,7 @@
 import { useAuth } from '@clerk/clerk-react'
 import { useEffect, useState } from 'react'
 import { Navigate } from 'react-router-dom'
+import { PageLoader } from '@/components/ui/PageLoader'
 
 /**
  * Wraps sign-in / sign-up: redirect signed-in users to dashboard;
@@ -23,15 +24,11 @@ export function AuthGuestPage({
   }, [isLoaded, isSignedIn, sessionExpired, signOut, signingOut])
 
   if (!isLoaded || signingOut) {
-    return (
-      <div className="flex min-h-screen items-center justify-center text-slate-400">
-        Loading…
-      </div>
-    )
+    return <PageLoader message={signingOut ? 'Signing out…' : 'Loading…'} />
   }
 
   if (isSignedIn && !sessionExpired) {
-    return <Navigate to="/" replace />
+    return <Navigate to="/dashboard" replace />
   }
 
   return <>{children}</>

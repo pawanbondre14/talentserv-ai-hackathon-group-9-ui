@@ -8,6 +8,30 @@ const MODE_LABELS = {
   interview: 'Interview Feedback',
 } as const
 
+const STATUS_STYLES = {
+  processing: {
+    accent: 'border-l-indigo-500',
+    ring: 'ring-indigo-500/20',
+    icon: 'text-indigo-400',
+    dot: 'bg-indigo-400',
+    bar: 'from-indigo-500 via-violet-400 to-indigo-500',
+  },
+  done: {
+    accent: 'border-l-emerald-500',
+    ring: 'ring-emerald-500/20',
+    icon: 'text-emerald-400',
+    dot: 'bg-emerald-400',
+    bar: '',
+  },
+  error: {
+    accent: 'border-l-red-500',
+    ring: 'ring-red-500/20',
+    icon: 'text-red-400',
+    dot: 'bg-red-400',
+    bar: '',
+  },
+} as const
+
 export function providerLabel(provider: string | null | undefined): string {
   if (!provider) return 'AI'
   switch (provider.toLowerCase()) {
@@ -20,6 +44,17 @@ export function providerLabel(provider: string | null | undefined): string {
     default:
       return provider
   }
+}
+
+function StatusDot({ className }: { className: string }) {
+  return (
+    <span className="relative flex h-2 w-2 shrink-0">
+      <span
+        className={cn('absolute inline-flex h-full w-full animate-ping rounded-full opacity-60', className)}
+      />
+      <span className={cn('relative inline-flex h-2 w-2 rounded-full', className)} />
+    </span>
+  )
 }
 
 export function AiStatusBadge({
@@ -38,66 +73,49 @@ export function AiStatusBadge({
   if (status === 'idle') return null
 
   const modeLabel = MODE_LABELS[mode]
-
-  if (status === 'processing') {
-    return (
-      <div
-        className={cn(
-          'inline-flex flex-wrap items-center gap-2 rounded-full border border-amber-500/40 bg-amber-500/15 px-3 py-1.5 text-sm text-amber-100',
-          className,
-        )}
-        role="status"
-        aria-live="polite"
-      >
-        <Loader2 className="h-4 w-4 shrink-0 animate-spin text-amber-300" />
-        <span>
-          Generating <strong className="font-semibold">{modeLabel}</strong>…
-        </span>
-      </div>
-    )
-  }
-
-  if (status === 'error') {
-    return (
-      <div
-        className={cn(
-          'inline-flex items-center gap-2 rounded-full border border-red-500/40 bg-red-500/15 px-3 py-1.5 text-sm text-red-200',
-          className,
-        )}
-        role="status"
-      >
-        <XCircle className="h-4 w-4 shrink-0" />
-        <span>{modeLabel} generation failed</span>
-      </div>
-    )
-  }
-
+  const styles = STATUS_STYLES[status === 'processing' ? 'processing' : status === 'error' ? 'error' : 'done']
   const isMock = provider?.toLowerCase() === 'mock'
+
   return (
     <div
       className={cn(
-        'inline-flex flex-wrap items-center gap-2 rounded-full border px-3 py-1.5 text-sm',
-        isMock
-          ? 'border-violet-500/40 bg-violet-500/15 text-violet-100'
-          : 'border-emerald-500/40 bg-emerald-500/15 text-emerald-100',
+        'inline-flex max-w-full flex-wrap items-center gap-2 rounded-md border border-[var(--color-surface-border)] border-l-[3px] bg-black/30 px-2.5 py-1.5 text-xs text-slate-200',
+        styles.accent,
         className,
       )}
       role="status"
+      aria-live={status === 'processing' ? 'polite' : undefined}
     >
-      {isMock ? (
-        <FlaskConical className="h-4 w-4 shrink-0 text-violet-300" />
-      ) : (
-        <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-300" />
+      {status === 'processing' && (
+        <>
+          <StatusDot className={styles.dot} />
+          <span>
+            Generating <strong className="font-semibold text-white">{modeLabel}</strong>…
+          </span>
+        </>
       )}
-      <span>
-        Done · <strong className="font-semibold">{modeLabel}</strong>
-        {' · '}
-        {providerLabel(provider)}
-      </span>
-      {truncated && (
-        <span className="rounded bg-amber-500/20 px-1.5 py-0.5 text-xs text-amber-200">
-          transcript truncated
-        </span>
+      {status === 'error' && (
+        <>
+          <XCircle className={cn('h-3.5 w-3.5 shrink-0', styles.icon)} />
+          <span>{modeLabel} failed</span>
+        </>
+      )}
+      {status === 'done' && (
+        <>
+          {isMock ? (
+            <FlaskConical className="h-3.5 w-3.5 shrink-0 text-violet-400" />
+          ) : (
+            <CheckCircle2 className={cn('h-3.5 w-3.5 shrink-0', styles.icon)} />
+          )}
+          <span>
+            {modeLabel} · {providerLabel(provider)}
+          </span>
+          {truncated && (
+            <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] text-amber-200">
+              shortened
+            </span>
+          )}
+        </>
       )}
     </div>
   )
@@ -117,50 +135,69 @@ export function AiStatusPanel({
   if (status === 'idle') return null
 
   const modeLabel = MODE_LABELS[mode]
+  const styles = STATUS_STYLES[status]
+  const isMock = provider?.toLowerCase() === 'mock'
 
   return (
     <div
       className={cn(
-        'rounded-xl border p-4 backdrop-blur',
-        status === 'processing' && 'border-amber-500/30 bg-amber-500/10',
-        status === 'done' && 'border-emerald-500/30 bg-emerald-500/10',
-        status === 'error' && 'border-red-500/30 bg-red-500/10',
+        'overflow-hidden rounded-lg border border-[var(--color-surface-border)] border-l-4 bg-black/25 ring-1 ring-inset',
+        styles.accent,
+        styles.ring,
       )}
+      role="status"
+      aria-live={status === 'processing' ? 'polite' : undefined}
     >
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-start gap-3">
+      <div className="flex items-start gap-3 px-4 py-3">
+        <div className="mt-0.5 shrink-0">
           {status === 'processing' && (
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-amber-500/20">
-              <Loader2 className="h-5 w-5 animate-spin text-amber-300" />
-            </div>
+            <Loader2 className={cn('h-4 w-4 animate-spin', styles.icon)} />
           )}
-          {status === 'done' && (
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-emerald-500/20">
-              <Sparkles className="h-5 w-5 text-emerald-300" />
-            </div>
-          )}
-          {status === 'error' && (
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-red-500/20">
-              <XCircle className="h-5 w-5 text-red-300" />
-            </div>
-          )}
-          <div>
-            <p className="font-medium text-white">
-              {status === 'processing' && `AI is generating ${modeLabel}`}
+          {status === 'done' &&
+            (isMock ? (
+              <FlaskConical className="h-4 w-4 text-violet-400" />
+            ) : (
+              <Sparkles className={cn('h-4 w-4', styles.icon)} />
+            ))}
+          {status === 'error' && <XCircle className={cn('h-4 w-4', styles.icon)} />}
+        </div>
+
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            {status === 'processing' && <StatusDot className={styles.dot} />}
+            <p className="text-sm font-medium text-white">
+              {status === 'processing' && `Generating ${modeLabel}`}
               {status === 'done' && `${modeLabel} ready`}
               {status === 'error' && `Could not generate ${modeLabel}`}
             </p>
-            <p className="mt-0.5 text-xs text-slate-400">
-              {status === 'processing' &&
-                'This may take 15–60 seconds. Check your backend terminal for live logs.'}
-              {status === 'done' &&
-                `Generated via ${providerLabel(provider)}${truncated ? ' · transcript was shortened' : ''}`}
-              {status === 'error' && 'See the error message below or backend logs for details.'}
-            </p>
+            {status === 'done' && (
+              <span className="rounded-full bg-white/5 px-2 py-0.5 text-[11px] text-slate-400">
+                {providerLabel(provider)}
+              </span>
+            )}
           </div>
+          <p className="mt-1 text-xs leading-relaxed text-slate-400">
+            {status === 'processing' && 'This may take 15–60 seconds. Please keep this page open.'}
+            {status === 'done' &&
+              (truncated
+                ? 'Your output is ready. The transcript was shortened to fit model limits.'
+                : 'Your AI output is ready to review and edit.')}
+            {status === 'error' &&
+              'Something went wrong. See the message below for details, then try again.'}
+          </p>
         </div>
-        <AiStatusBadge mode={mode} status={status} provider={provider} truncated={truncated} />
       </div>
+
+      {status === 'processing' && (
+        <div className="h-1 w-full bg-black/40">
+          <div
+            className={cn(
+              'h-full w-full animate-shimmer bg-gradient-to-r',
+              styles.bar,
+            )}
+          />
+        </div>
+      )}
     </div>
   )
 }

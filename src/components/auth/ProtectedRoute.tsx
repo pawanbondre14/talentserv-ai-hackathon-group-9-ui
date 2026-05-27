@@ -1,19 +1,16 @@
 import { useAuth } from '@clerk/clerk-react'
 import { Navigate, Outlet } from 'react-router-dom'
+import { PageLoader } from '@/components/ui/PageLoader'
 
 export function ProtectedRoute() {
   const { isLoaded, isSignedIn } = useAuth()
 
   if (!isLoaded) {
-    return (
-      <div className="flex min-h-screen items-center justify-center text-slate-400">
-        Loading…
-      </div>
-    )
+    return <PageLoader message="Checking your session…" />
   }
 
   if (!isSignedIn) {
-    return <Navigate to="/sign-in" replace />
+    return <Navigate to="/" replace />
   }
 
   return <Outlet />

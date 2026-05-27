@@ -1,7 +1,13 @@
+import { useAuth } from '@clerk/clerk-react'
 import { useCallback, useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
+import { motion } from 'framer-motion'
 import { Calendar, FileCheck, Search, Trash2, Users } from 'lucide-react'
 import { Card } from '@/components/ui/Card'
+import { FadeIn } from '@/components/ui/FadeIn'
+import { InlineAlert } from '@/components/ui/InlineAlert'
+import { SessionCardSkeleton } from '@/components/ui/Skeleton'
+import { Spinner } from '@/components/ui/Spinner'
 import { useApi } from '@/hooks/useApi'
 import {
   deleteSession,
@@ -14,7 +20,7 @@ import { cn } from '@/lib/utils'
 const PAGE_SIZE = 15
 
 type ModeFilter = 'all' | 'meeting' | 'interview'
-type StatusFilter = 'all' | 'draft' | 'ready' | 'error'
+type StatusFilter = 'all' | 'draft' | 'processing' | 'ready' | 'error'
 
 function statusColor(status: string) {
   switch (status) {
@@ -29,16 +35,35 @@ function statusColor(status: string) {
   }
 }
 
+function parseStatusFilter(value: string | null): StatusFilter {
+  if (value === 'draft' || value === 'ready' || value === 'error' || value === 'processing') {
+    return value
+  }
+  return 'all'
+}
+
+function parseModeFilter(value: string | null): ModeFilter {
+  if (value === 'meeting' || value === 'interview') return value
+  return 'all'
+}
+
 export function History() {
   const api = useApi()
+  const { isLoaded, isSignedIn } = useAuth()
+  const [searchParams] = useSearchParams()
   const [query, setQuery] = useState('')
-  const [modeFilter, setModeFilter] = useState<ModeFilter>('all')
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
+  const [modeFilter, setModeFilter] = useState<ModeFilter>(() =>
+    parseModeFilter(searchParams.get('mode')),
+  )
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>(() =>
+    parseStatusFilter(searchParams.get('status')),
+  )
   const [items, setItems] = useState<SessionListItem[]>([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
 
   const fetchPage = useCallback(
@@ -67,9 +92,10 @@ export function History() {
   )
 
   useEffect(() => {
+    if (!isLoaded || !isSignedIn) return
     const timer = setTimeout(() => fetchPage(0, false), 300)
     return () => clearTimeout(timer)
-  }, [fetchPage])
+  }, [fetchPage, isLoaded, isSignedIn])
 
   async function handleLoadMore() {
     await fetchPage(items.length, true)
@@ -80,12 +106,15 @@ export function History() {
     e.stopPropagation()
     if (!confirm('Delete this session permanently?')) return
     setDeletingId(id)
+    setNotice(null)
     try {
       await deleteSession(api, id)
       setItems((prev) => prev.filter((s) => s.id !== id))
       setTotal((t) => Math.max(0, t - 1))
-    } catch {
-      setError('Failed to delete session.')
+      setNotice('Session deleted.')
+      setTimeout(() => setNotice(null), 2500)
+    } catch (err: unknown) {
+      setError(getApiErrorMessage(err, 'Could not delete session.'))
     } finally {
       setDeletingId(null)
     }
@@ -95,12 +124,12 @@ export function History() {
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
-      <div>
+      <FadeIn>
         <h1 className="text-2xl font-bold text-white">History</h1>
         <p className="mt-1 text-sm text-[var(--color-muted)]">
           Search titles, transcripts, and AI output. Filter by type or status.
         </p>
-      </div>
+      </FadeIn>
 
       <div className="relative">
         <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
@@ -133,7 +162,7 @@ export function History() {
       </div>
 
       <div className="flex flex-wrap gap-2">
-        {(['all', 'draft', 'ready', 'error'] as const).map((s) => (
+        {(['all', 'draft', 'processing', 'ready', 'error'] as const).map((s) => (
           <button
             key={s}
             type="button"
@@ -150,8 +179,15 @@ export function History() {
         ))}
       </div>
 
-      {error && <p className="text-sm text-red-300">{error}</p>}
-      {loading && <p className="text-sm text-slate-500">Loading…</p>}
+      <InlineAlert variant="success">{notice}</InlineAlert>
+      <InlineAlert variant="error">{error}</InlineAlert>
+      {loading && (
+        <div className="space-y-3">
+          {[1, 2, 3, 4].map((i) => (
+            <SessionCardSkeleton key={i} />
+          ))}
+        </div>
+      )}
 
       {!loading && !error && (
         <p className="text-xs text-slate-500">
@@ -160,8 +196,14 @@ export function History() {
       )}
 
       <div className="space-y-3">
-        {items.map((item) => (
-          <Link key={item.id} to={`/session/${item.id}`} className="block">
+        {items.map((item, i) => (
+          <motion.div
+            key={item.id}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: i * 0.04, duration: 0.28 }}
+          >
+          <Link to={`/session/${item.id}`} className="block">
             <Card hover>
               <div className="flex items-start justify-between gap-4">
                 <div className="min-w-0 flex-1">
@@ -204,6 +246,7 @@ export function History() {
               </div>
             </Card>
           </Link>
+          </motion.div>
         ))}
         {!loading && items.length === 0 && (
           <Card>
@@ -219,7 +262,7 @@ export function History() {
           disabled={loadingMore}
           className="w-full rounded-lg border border-[var(--color-surface-border)] py-2.5 text-sm text-slate-300 hover:border-indigo-500/50 hover:text-white"
         >
-          {loadingMore ? 'Loading…' : 'Load more'}
+          {loadingMore ? <Spinner size="sm" label="Loading more…" /> : 'Load more'}
         </button>
       )}
     </div>
