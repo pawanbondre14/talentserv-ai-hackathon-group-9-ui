@@ -114,7 +114,7 @@ export function useAutosave<T>(
   useEffect(() => {
     if (!enabled) {
       clearPendingTimer()
-      setStatus('idle')
+      setAutosaveStatus('idle')
       isFirst.current = true
       return
     }
@@ -125,7 +125,7 @@ export function useAutosave<T>(
     }
     if (serialized === lastSavedSerializedRef.current) return
 
-    setStatus('pending')
+    setAutosaveStatus('pending')
     clearPendingTimer()
     timerRef.current = setTimeout(() => {
       timerRef.current = null
@@ -133,7 +133,7 @@ export function useAutosave<T>(
     }, delayMs)
 
     return clearPendingTimer
-  }, [serialized, enabled, delayMs, clearPendingTimer, runSave])
+  }, [serialized, enabled, delayMs, clearPendingTimer, runSave, setAutosaveStatus])
 
   return { status: enabled ? status : 'idle', flush }
 }
