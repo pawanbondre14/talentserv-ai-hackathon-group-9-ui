@@ -3,7 +3,9 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Loader2, Upload } from 'lucide-react'
 import { FadeIn } from '@/components/ui/FadeIn'
 import { AiStatusPanel, saveAiMeta, type AiRunStatus } from '@/components/output/AiStatusBadge'
+import { Can } from '@/components/auth/Can'
 import { TeamsImportPanel } from '@/components/teams/TeamsImportPanel'
+import { PERMISSIONS } from '@/lib/permissions'
 import { Card } from '@/components/ui/Card'
 import { InlineAlert } from '@/components/ui/InlineAlert'
 import { useApi } from '@/hooks/useApi'
@@ -202,13 +204,26 @@ export function NewSession() {
           )}
 
           {tab === 'teams' && (
-            <TeamsImportPanel
-              mode={mode}
-              runAi={runAi}
-              interviewOptions={mode === 'interview' ? interviewOptions : undefined}
-              initialNotice={teamsNotice}
-              initialError={teamsError}
-            />
+            <Can
+              anyOf={[
+                PERMISSIONS.INTEGRATIONS_TEAMS,
+                PERMISSIONS.INTEGRATIONS_ONEDRIVE,
+                PERMISSIONS.INTEGRATIONS_MICROSOFT,
+              ]}
+              fallback={
+                <p className="text-sm text-slate-400">
+                  You do not have permission to import from Teams or OneDrive.
+                </p>
+              }
+            >
+              <TeamsImportPanel
+                mode={mode}
+                runAi={runAi}
+                interviewOptions={mode === 'interview' ? interviewOptions : undefined}
+                initialNotice={teamsNotice}
+                initialError={teamsError}
+              />
+            </Can>
           )}
 
           {tab === 'upload' && (

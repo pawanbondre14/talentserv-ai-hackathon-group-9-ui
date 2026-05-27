@@ -11,11 +11,26 @@ export type GetTokenFn = (options?: { skipCache?: boolean }) => Promise<string |
 type RetryableConfig = InternalAxiosRequestConfig & { _authRetry?: boolean }
 
 let unauthorizedHandled = false
+let forbiddenHandled = false
+
+export class ForbiddenError extends Error {
+  constructor(message = 'Forbidden') {
+    super(message)
+    this.name = 'ForbiddenError'
+  }
+}
+
+export function isForbiddenError(err: unknown): err is ForbiddenError {
+  return err instanceof ForbiddenError
+}
 
 /** User-facing message; avoids leaking raw backend auth strings in the UI. */
 export function getApiErrorMessage(err: unknown, fallback: string): string {
   if (isSessionExpiredError(err)) {
     return 'Your session expired. Please sign in again.'
+  }
+  if (isForbiddenError(err)) {
+    return err.message ?? 'You do not have permission to perform this action.'
   }
   if (axios.isAxiosError(err)) {
     const status = err.response?.status
@@ -56,6 +71,7 @@ function sessionExpiredError(): Error {
 export function createApiClient(
   getToken: GetTokenFn,
   onUnauthorized?: () => void,
+  onForbidden?: () => void,
 ): AxiosInstance {
   const client = axios.create({
     baseURL,
@@ -73,6 +89,7 @@ export function createApiClient(
   client.interceptors.response.use(
     (response) => {
       unauthorizedHandled = false
+      forbiddenHandled = false
       return response
     },
     async (error: unknown) => {
@@ -103,11 +120,38 @@ export function createApiClient(
         return Promise.reject(sessionExpiredError())
       }
 
+      if (status === 403) {
+        if (!forbiddenHandled) {
+          forbiddenHandled = true
+          onForbidden?.()
+        }
+        const detail = parseApiDetail(error.response?.data?.detail)
+        return Promise.reject(new ForbiddenError(detail ?? 'Forbidden'))
+      }
+
       return Promise.reject(error)
     },
   )
 
   return client
+}
+
+export interface MeUser {
+  id: string
+  clerk_user_id: string
+  email: string | null
+  display_name: string | null
+}
+
+export interface MeResponse {
+  user: MeUser
+  roles: string[]
+  permissions: string[]
+}
+
+export async function fetchMe(client: AxiosInstance) {
+  const { data } = await client.get<MeResponse>('/api/me')
+  return data
 }
 
 export interface SessionListItem {

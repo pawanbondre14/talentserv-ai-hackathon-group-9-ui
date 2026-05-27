@@ -28,8 +28,12 @@ export function useApi() {
     navigate('/sign-in', { replace: true, state: { reason: 'session-expired' } })
   }, [navigate, signOut])
 
+  const onForbidden = useCallback(() => {
+    navigate('/forbidden', { replace: true })
+  }, [navigate])
+
   return useMemo(
-    () => createApiClient(resolveToken, onUnauthorized),
-    [resolveToken, onUnauthorized],
+    () => createApiClient(resolveToken, onUnauthorized, onForbidden),
+    [resolveToken, onUnauthorized, onForbidden],
   )
 }

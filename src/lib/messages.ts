@@ -24,6 +24,10 @@ export function getOAuthMessage(code: string | null, status: 'connected' | 'erro
 export function parseApiDetail(detail: unknown): string | null {
   if (!detail) return null
   if (typeof detail === 'string') return detail
+  if (typeof detail === 'object' && detail !== null && 'message' in detail) {
+    const msg = (detail as { message?: unknown }).message
+    if (typeof msg === 'string') return msg
+  }
   if (Array.isArray(detail)) {
     const parts = detail
       .map((item) => {

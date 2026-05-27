@@ -1,6 +1,8 @@
 import { Link } from 'react-router-dom'
 import { Briefcase, Calendar, ChevronRight, MessageSquare, Users } from 'lucide-react'
+import { Can } from '@/components/auth/Can'
 import { RecentSessions } from '@/components/dashboard/RecentSessions'
+import { PERMISSIONS } from '@/lib/permissions'
 import { Card } from '@/components/ui/Card'
 import { FadeIn, StaggerItem, StaggerList } from '@/components/ui/FadeIn'
 
@@ -55,6 +57,7 @@ export function Dashboard() {
       <StaggerList className="grid gap-4 md:grid-cols-2">
         {actions.map(({ to, title, description, icon: Icon, accent }) => (
           <StaggerItem key={to}>
+            <Can permission={PERMISSIONS.SESSIONS_CREATE}>
             <Link to={to}>
               <Card hover className={`h-full border bg-gradient-to-br ${accent}`}>
                 <div className="flex items-start justify-between">
@@ -67,6 +70,7 @@ export function Dashboard() {
                 <p className="mt-2 text-sm text-slate-400">{description}</p>
               </Card>
             </Link>
+            </Can>
           </StaggerItem>
         ))}
       </StaggerList>

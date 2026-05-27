@@ -8,7 +8,9 @@ import { FadeIn } from '@/components/ui/FadeIn'
 import { InlineAlert } from '@/components/ui/InlineAlert'
 import { SessionCardSkeleton } from '@/components/ui/Skeleton'
 import { Spinner } from '@/components/ui/Spinner'
+import { Can } from '@/components/auth/Can'
 import { useApi } from '@/hooks/useApi'
+import { PERMISSIONS } from '@/lib/permissions'
 import {
   deleteSession,
   fetchSessions,
@@ -95,7 +97,6 @@ export function History() {
       setItems((prev) => prev.filter((s) => s.id !== id))
       setTotal((t) => Math.max(0, t - 1))
       setNotice('Session deleted.')
-      setTimeout(() => setNotice(null), 2500)
     } catch (err: unknown) {
       setError(getApiErrorMessage(err, 'Could not delete session.'))
     } finally {
@@ -216,15 +217,17 @@ export function History() {
                   >
                     {item.status}
                   </span>
-                  <button
-                    type="button"
-                    onClick={(e) => handleDelete(e, item.id)}
-                    disabled={deletingId === item.id}
-                    className="rounded p-1 text-slate-500 hover:bg-red-500/20 hover:text-red-300"
-                    aria-label="Delete session"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
+                  <Can permission={PERMISSIONS.SESSIONS_DELETE}>
+                    <button
+                      type="button"
+                      onClick={(e) => handleDelete(e, item.id)}
+                      disabled={deletingId === item.id}
+                      className="rounded p-1 text-slate-500 hover:bg-red-500/20 hover:text-red-300"
+                      aria-label="Delete session"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </Can>
                 </div>
               </div>
             </Card>

@@ -16,7 +16,9 @@ import {
   InterviewOptionsPanel,
   defaultInterviewOptions,
 } from '@/components/interview/InterviewOptionsPanel'
+import { Can } from '@/components/auth/Can'
 import { FloatingSessionChat } from '@/components/chat/FloatingSessionChat'
+import { PERMISSIONS } from '@/lib/permissions'
 import { InlineAlert } from '@/components/ui/InlineAlert'
 import { InterviewOutputEditor } from '@/components/output/InterviewOutputEditor'
 import { MeetingOutputEditor } from '@/components/output/MeetingOutputEditor'
@@ -243,38 +245,42 @@ export function SessionDetail() {
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
-          {!hasOutput && (
-            <button
-              type="button"
-              onClick={handleProcess}
-              disabled={processing || session.word_count < 50}
-              className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500 disabled:opacity-50"
-            >
-              {!processing && <Sparkles className="h-4 w-4" />}
-              {processing ? 'Processing…' : 'Generate with AI'}
-            </button>
-          )}
-          {hasOutput && (
-            <button
-              type="button"
-              onClick={handleSave}
-              disabled={saving}
-              className="inline-flex items-center gap-2 rounded-lg border border-indigo-500/50 bg-indigo-500/10 px-4 py-2 text-sm font-medium text-indigo-200"
-            >
-              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-              {saveOk ? 'Saved' : 'Save edits'}
-            </button>
-          )}
-          {hasOutput && (
-            <button
-              type="button"
-              onClick={handleProcess}
-              disabled={processing}
-              className="inline-flex items-center gap-2 rounded-lg border border-[var(--color-surface-border)] px-4 py-2 text-sm text-slate-300 hover:text-white"
-            >
-              Regenerate
-            </button>
-          )}
+          <Can permission={PERMISSIONS.SESSIONS_PROCESS}>
+            {!hasOutput && (
+              <button
+                type="button"
+                onClick={handleProcess}
+                disabled={processing || session.word_count < 50}
+                className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500 disabled:opacity-50"
+              >
+                {!processing && <Sparkles className="h-4 w-4" />}
+                {processing ? 'Processing…' : 'Generate with AI'}
+              </button>
+            )}
+            {hasOutput && (
+              <button
+                type="button"
+                onClick={handleProcess}
+                disabled={processing}
+                className="inline-flex items-center gap-2 rounded-lg border border-[var(--color-surface-border)] px-4 py-2 text-sm text-slate-300 hover:text-white"
+              >
+                Regenerate
+              </button>
+            )}
+          </Can>
+          <Can permission={PERMISSIONS.OUTPUT_EDIT}>
+            {hasOutput && (
+              <button
+                type="button"
+                onClick={handleSave}
+                disabled={saving}
+                className="inline-flex items-center gap-2 rounded-lg border border-indigo-500/50 bg-indigo-500/10 px-4 py-2 text-sm font-medium text-indigo-200"
+              >
+                {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                {saveOk ? 'Saved' : 'Save edits'}
+              </button>
+            )}
+          </Can>
         </div>
       </div>
 
@@ -329,12 +335,14 @@ export function SessionDetail() {
       )}
 
       {id && (
-        <FloatingSessionChat
-          sessionId={id}
-          mode={session.mode}
-          enabled={hasOutput}
-          sessionTitle={session.title}
-        />
+        <Can permission={PERMISSIONS.CHAT_USE}>
+          <FloatingSessionChat
+            sessionId={id}
+            mode={session.mode}
+            enabled={hasOutput}
+            sessionTitle={session.title}
+          />
+        </Can>
       )}
     </div>
   )
