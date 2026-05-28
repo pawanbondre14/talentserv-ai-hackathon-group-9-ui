@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { ArrowLeft, Loader2, Sparkles, Save } from 'lucide-react'
 import { AutosaveIndicator } from '@/components/ui/AutosaveIndicator'
@@ -73,10 +73,16 @@ export function SessionDetail() {
   const [interviewOptions, setInterviewOptions] = useState<InterviewProcessOptions>(
     defaultInterviewOptions,
   )
+  const outputRef = useRef<MeetingMinutesOutput | InterviewFeedbackOutput | null>(null)
+  const activeSessionIdRef = useRef<string | null>(null)
 
-  const load = useCallback(async () => {
-    if (!id) return
-    const data = await fetchSessionFull(api, id)
+  useEffect(() => {
+    outputRef.current = output
+  }, [output])
+
+  const load = useCallback(async (sessionId: string, isActive: () => boolean) => {
+    const data = await fetchSessionFull(api, sessionId)
+    if (!isActive() || data.id !== sessionId) return
     setSession(data)
     if (data.interview_meta) {
       const m = data.interview_meta
@@ -88,9 +94,15 @@ export function SessionDetail() {
         candidate_email: m.candidate_email,
         panel_transcripts: null,
       })
+    } else {
+      setInterviewOptions(defaultInterviewOptions)
     }
-    const draft = id ? loadDraftBackup<MeetingMinutesOutput | InterviewFeedbackOutput>(id) : null
     const raw = data.output?.edited_json ?? data.output?.ai_json
+    const draft = loadDraftBackup<MeetingMinutesOutput | InterviewFeedbackOutput>(
+      sessionId,
+      data.output?.updated_at,
+      Boolean(raw),
+    )
     if (draft && data.status === 'ready') {
       setOutput(
         data.mode === 'meeting'
@@ -118,7 +130,7 @@ export function SessionDetail() {
     if (data.status === 'processing') {
       setAiStatus('processing')
     } else if (data.status === 'ready' && data.output) {
-      const meta = id ? loadAiMeta(id) : null
+      const meta = loadAiMeta(sessionId)
       setAiStatus('done')
       setAiProvider(meta?.provider ?? null)
       setAiTruncated(meta?.truncated ?? false)
@@ -127,41 +139,79 @@ export function SessionDetail() {
     } else {
       setAiStatus('idle')
     }
-  }, [api, id])
+  }, [api])
 
   useEffect(() => {
-    load().catch((err: unknown) =>
-      setError(getApiErrorMessage(err, 'Session not found or could not be loaded.')),
-    )
-  }, [load])
+    if (!id) {
+      activeSessionIdRef.current = null
+      return
+    }
+    let active = true
+    activeSessionIdRef.current = id
+    setSession(null)
+    setOutput(null)
+    setError(null)
+    setProcessing(false)
+    setSaving(false)
+    setSaveOk(false)
+    setShowTranscript(false)
+    setAiStatus('idle')
+    setAiProvider(null)
+    setAiTruncated(false)
 
-  const hasOutput = output !== null && session?.status === 'ready'
+    load(id, () => active).catch((err: unknown) => {
+      if (active) {
+        setError(getApiErrorMessage(err, 'Session not found or could not be loaded.'))
+      }
+    })
+
+    return () => {
+      active = false
+    }
+  }, [id, load])
+
+  const activeSessionId = id && session?.id === id ? id : null
+  const hasOutput = activeSessionId !== null && output !== null && session?.status === 'ready'
 
   const saveOutput = useCallback(
     async (data: MeetingMinutesOutput | InterviewFeedbackOutput) => {
-      if (!id) return
+      if (!activeSessionId || activeSessionIdRef.current !== activeSessionId) return
       const normalized =
         session?.mode === 'interview'
           ? normalizeInterviewOutput(data as InterviewFeedbackOutput)
           : normalizeMeetingOutput(data as MeetingMinutesOutput)
-      await updateSessionOutput(api, id, normalized as unknown as Record<string, unknown>)
-      if (id) clearDraftBackup(id)
+      await updateSessionOutput(api, activeSessionId, normalized as unknown as Record<string, unknown>)
+      if (
+        activeSessionIdRef.current === activeSessionId &&
+        JSON.stringify(outputRef.current) === JSON.stringify(data)
+      ) {
+        clearDraftBackup(activeSessionId)
+      }
     },
-    [api, id, session?.mode],
+    [activeSessionId, api, session?.mode],
   )
 
   const autosaveStatus = useAutosave(
     output as MeetingMinutesOutput | InterviewFeedbackOutput,
     saveOutput,
     Boolean(hasOutput && output),
+    1500,
+    activeSessionId,
   )
 
-  useDraftBackup(id, output, Boolean(hasOutput && output))
+  useDraftBackup(
+    activeSessionId ?? undefined,
+    output,
+    Boolean(hasOutput && output),
+    session?.output?.updated_at,
+  )
 
   const titleDisplay = useMemo(() => session?.title ?? '', [session?.title])
 
   async function handleProcess() {
-    if (!id) return
+    if (!activeSessionId || !session) return
+    const targetSessionId = activeSessionId
+    const targetMode = session.mode
     setProcessing(true)
     setAiStatus('processing')
     setAiProvider(null)
@@ -169,20 +219,21 @@ export function SessionDetail() {
     try {
       const result = await processSession(
         api,
-        id,
-        session?.mode === 'interview' ? interviewOptions : null,
+        targetSessionId,
+        targetMode === 'interview' ? interviewOptions : null,
       )
-      setSession({ ...session!, ...result.session, output: result.output })
+      if (activeSessionIdRef.current !== targetSessionId) return
+      setSession({ ...session, ...result.session, output: result.output })
       setAiStatus('done')
       setAiProvider(result.provider)
       setAiTruncated(result.truncated)
-      saveAiMeta(id, {
+      saveAiMeta(targetSessionId, {
         provider: result.provider,
         truncated: result.truncated,
         completedAt: new Date().toISOString(),
       })
       const raw = result.output.edited_json ?? result.output.ai_json
-      if (session?.mode === 'interview' || result.session.mode === 'interview') {
+      if (targetMode === 'interview' || result.session.mode === 'interview') {
         setOutput(
           normalizeInterviewOutput(
             (raw as unknown as InterviewFeedbackOutput) || emptyInterview(),
@@ -194,25 +245,33 @@ export function SessionDetail() {
         )
       }
     } catch (err: unknown) {
+      if (activeSessionIdRef.current !== targetSessionId) return
       setAiStatus('error')
       setError(getApiErrorMessage(err, 'AI processing failed. Try again in a moment.'))
     } finally {
-      setProcessing(false)
+      if (activeSessionIdRef.current === targetSessionId) {
+        setProcessing(false)
+      }
     }
   }
 
   async function handleSave() {
-    if (!id || !output) return
+    if (!activeSessionId || !output) return
+    const targetSessionId = activeSessionId
     setSaving(true)
     setSaveOk(false)
     try {
       await saveOutput(output)
+      if (activeSessionIdRef.current !== targetSessionId) return
       setSaveOk(true)
       setTimeout(() => setSaveOk(false), 2000)
     } catch (err: unknown) {
+      if (activeSessionIdRef.current !== targetSessionId) return
       setError(getApiErrorMessage(err, 'Could not save changes.'))
     } finally {
-      setSaving(false)
+      if (activeSessionIdRef.current === targetSessionId) {
+        setSaving(false)
+      }
     }
   }
 
