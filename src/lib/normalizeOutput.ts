@@ -21,8 +21,12 @@ export function formatListEntry(item: unknown): string {
   return String(item)
 }
 
-export function normalizeStringList(items: unknown[] | undefined | null): string[] {
-  if (!items?.length) return []
+export function normalizeStringList(items: unknown): string[] {
+  if (!Array.isArray(items)) {
+    const entry = formatListEntry(items)
+    return entry ? [entry] : []
+  }
+  if (!items.length) return []
   return items.map(formatListEntry).filter((s) => s.length > 0)
 }
 
@@ -56,6 +60,7 @@ export function normalizeMeetingOutput(data: MeetingMinutesOutput): MeetingMinut
 
 export function normalizeInterviewOutput(data: InterviewFeedbackOutput): InterviewFeedbackOutput {
   const sk = data.skill_observations || ({} as InterviewFeedbackOutput['skill_observations'])
+  const jd = data.jd_analysis
   return {
     ...data,
     candidate_summary:
@@ -76,5 +81,17 @@ export function normalizeInterviewOutput(data: InterviewFeedbackOutput): Intervi
         : formatListEntry(data.communication_assessment),
     rationale: typeof data.rationale === 'string' ? data.rationale : formatListEntry(data.rationale),
     follow_up_questions: normalizeStringList(data.follow_up_questions as unknown[]),
+    jd_analysis: jd
+      ? {
+          ...jd,
+          overall_fit_score:
+            typeof jd.overall_fit_score === 'number'
+              ? jd.overall_fit_score
+              : Number(jd.overall_fit_score) || 0,
+          matched_requirements: normalizeStringList(jd.matched_requirements as unknown[]),
+          gaps: normalizeStringList(jd.gaps as unknown[]),
+          summary: typeof jd.summary === 'string' ? jd.summary : formatListEntry(jd.summary),
+        }
+      : undefined,
   }
 }
