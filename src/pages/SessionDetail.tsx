@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { ArrowLeft, Loader2, Sparkles, Save } from 'lucide-react'
 import { AutosaveIndicator } from '@/components/ui/AutosaveIndicator'
@@ -73,6 +73,8 @@ export function SessionDetail() {
   const [interviewOptions, setInterviewOptions] = useState<InterviewProcessOptions>(
     defaultInterviewOptions,
   )
+  const autosavePausedRef = useRef(false)
+  const pendingSavesRef = useRef(new Set<Promise<void>>())
 
   const load = useCallback(async () => {
     if (!id) return
@@ -91,13 +93,20 @@ export function SessionDetail() {
     }
     const draft = id ? loadDraftBackup<MeetingMinutesOutput | InterviewFeedbackOutput>(id) : null
     const raw = data.output?.edited_json ?? data.output?.ai_json
-    if (draft && data.status === 'ready') {
+    const serverOutputUpdatedAt = data.output?.updated_at ?? null
+    const draftMatchesServer =
+      draft !== null &&
+      data.status === 'ready' &&
+      (!serverOutputUpdatedAt ||
+        (!draft.legacy && draft.serverUpdatedAt === serverOutputUpdatedAt))
+    if (draftMatchesServer) {
       setOutput(
         data.mode === 'meeting'
-          ? normalizeMeetingOutput(draft as MeetingMinutesOutput)
-          : normalizeInterviewOutput(draft as InterviewFeedbackOutput),
+          ? normalizeMeetingOutput(draft.value as MeetingMinutesOutput)
+          : normalizeInterviewOutput(draft.value as InterviewFeedbackOutput),
       )
     } else if (raw && data.mode === 'meeting') {
+      if (draft && id) clearDraftBackup(id)
       setOutput(
         normalizeMeetingOutput({
           ...emptyMeeting(),
@@ -105,6 +114,7 @@ export function SessionDetail() {
         }),
       )
     } else if (raw && data.mode === 'interview') {
+      if (draft && id) clearDraftBackup(id)
       setOutput(
         normalizeInterviewOutput({
           ...emptyInterview(),
@@ -139,34 +149,63 @@ export function SessionDetail() {
 
   const saveOutput = useCallback(
     async (data: MeetingMinutesOutput | InterviewFeedbackOutput) => {
-      if (!id) return
+      if (!id || autosavePausedRef.current) return
       const normalized =
         session?.mode === 'interview'
           ? normalizeInterviewOutput(data as InterviewFeedbackOutput)
           : normalizeMeetingOutput(data as MeetingMinutesOutput)
-      await updateSessionOutput(api, id, normalized as unknown as Record<string, unknown>)
-      if (id) clearDraftBackup(id)
+      const savePromise = updateSessionOutput(
+        api,
+        id,
+        normalized as unknown as Record<string, unknown>,
+      ).then((savedOutput) => {
+        setSession((current) =>
+          current && current.id === id
+            ? { ...current, updated_at: savedOutput.updated_at, output: savedOutput }
+            : current,
+        )
+        clearDraftBackup(id)
+      })
+      pendingSavesRef.current.add(savePromise)
+      try {
+        await savePromise
+      } finally {
+        pendingSavesRef.current.delete(savePromise)
+      }
     },
     [api, id, session?.mode],
   )
 
+  const waitForPendingSaves = useCallback(async () => {
+    while (pendingSavesRef.current.size > 0) {
+      await Promise.allSettled(Array.from(pendingSavesRef.current))
+    }
+  }, [])
+
   const autosaveStatus = useAutosave(
     output as MeetingMinutesOutput | InterviewFeedbackOutput,
     saveOutput,
-    Boolean(hasOutput && output),
+    Boolean(hasOutput && output && !processing),
   )
 
-  useDraftBackup(id, output, Boolean(hasOutput && output))
+  useDraftBackup(
+    id,
+    output,
+    Boolean(hasOutput && output && !processing),
+    session?.output?.updated_at,
+  )
 
   const titleDisplay = useMemo(() => session?.title ?? '', [session?.title])
 
   async function handleProcess() {
     if (!id) return
+    autosavePausedRef.current = true
     setProcessing(true)
     setAiStatus('processing')
     setAiProvider(null)
     setError(null)
     try {
+      await waitForPendingSaves()
       const result = await processSession(
         api,
         id,
@@ -181,6 +220,7 @@ export function SessionDetail() {
         truncated: result.truncated,
         completedAt: new Date().toISOString(),
       })
+      clearDraftBackup(id)
       const raw = result.output.edited_json ?? result.output.ai_json
       if (session?.mode === 'interview' || result.session.mode === 'interview') {
         setOutput(
@@ -197,12 +237,13 @@ export function SessionDetail() {
       setAiStatus('error')
       setError(getApiErrorMessage(err, 'AI processing failed. Try again in a moment.'))
     } finally {
+      autosavePausedRef.current = false
       setProcessing(false)
     }
   }
 
   async function handleSave() {
-    if (!id || !output) return
+    if (!id || !output || processing) return
     setSaving(true)
     setSaveOk(false)
     try {
@@ -285,7 +326,7 @@ export function SessionDetail() {
             <button
               type="button"
               onClick={handleSave}
-              disabled={saving}
+              disabled={saving || processing}
               className="inline-flex items-center gap-2 rounded-lg border border-indigo-500/50 bg-indigo-500/10 px-4 py-2 text-sm font-medium text-indigo-200"
             >
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
