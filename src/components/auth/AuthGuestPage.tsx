@@ -19,8 +19,14 @@ export function AuthGuestPage({
 
   useEffect(() => {
     if (!isLoaded || !sessionExpired || !isSignedIn || signingOut) return
+    let cancelled = false
     setSigningOut(true)
-    signOut({ redirectUrl: window.location.pathname }).catch(() => setSigningOut(false))
+    signOut({ redirectUrl: window.location.pathname }).finally(() => {
+      if (!cancelled) setSigningOut(false)
+    })
+    return () => {
+      cancelled = true
+    }
   }, [isLoaded, isSignedIn, sessionExpired, signOut, signingOut])
 
   if (!isLoaded || signingOut) {
