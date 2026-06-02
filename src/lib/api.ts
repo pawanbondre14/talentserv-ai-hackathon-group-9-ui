@@ -62,6 +62,14 @@ export function createApiClient(
     headers: { 'Content-Type': 'application/json' },
   })
 
+  const rejectAsSessionExpired = () => {
+    if (!unauthorizedHandled) {
+      unauthorizedHandled = true
+      onUnauthorized?.()
+    }
+    return Promise.reject(sessionExpiredError())
+  }
+
   client.interceptors.request.use(async (config) => {
     const token = await getToken()
     if (token) {
@@ -83,24 +91,25 @@ export function createApiClient(
       const status = error.response?.status
       const config = error.config as RetryableConfig
 
-      if (status === 401 && !config._authRetry) {
+      if (status === 401) {
         const hadAuth = Boolean(config.headers?.Authorization)
-        config._authRetry = true
-        const token = await getToken({ skipCache: true })
-        if (token) {
-          config.headers.Authorization = `Bearer ${token}`
-          return client.request(config)
+
+        if (!config._authRetry) {
+          config._authRetry = true
+          const token = await getToken({ skipCache: true })
+          if (token) {
+            config.headers.Authorization = `Bearer ${token}`
+            return client.request(config)
+          }
+
+          if (!hadAuth) {
+            return Promise.reject(error)
+          }
         }
 
-        if (!hadAuth) {
-          return Promise.reject(error)
+        if (hadAuth) {
+          return rejectAsSessionExpired()
         }
-
-        if (!unauthorizedHandled) {
-          unauthorizedHandled = true
-          onUnauthorized?.()
-        }
-        return Promise.reject(sessionExpiredError())
       }
 
       return Promise.reject(error)

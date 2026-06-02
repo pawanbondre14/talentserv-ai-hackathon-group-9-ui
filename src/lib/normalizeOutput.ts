@@ -56,6 +56,7 @@ export function normalizeMeetingOutput(data: MeetingMinutesOutput): MeetingMinut
 
 export function normalizeInterviewOutput(data: InterviewFeedbackOutput): InterviewFeedbackOutput {
   const sk = data.skill_observations || ({} as InterviewFeedbackOutput['skill_observations'])
+  const jd = data.jd_analysis
   return {
     ...data,
     candidate_summary:
@@ -76,5 +77,30 @@ export function normalizeInterviewOutput(data: InterviewFeedbackOutput): Intervi
         : formatListEntry(data.communication_assessment),
     rationale: typeof data.rationale === 'string' ? data.rationale : formatListEntry(data.rationale),
     follow_up_questions: normalizeStringList(data.follow_up_questions as unknown[]),
+    qa_pairs: (data.qa_pairs || []).map((pair) => ({
+      question: formatListEntry(pair.question),
+      answer: formatListEntry(pair.answer),
+      notes: formatListEntry(pair.notes),
+    })),
+    scorecard_scores: (data.scorecard_scores || []).map((score) => ({
+      criterion: formatListEntry(score.criterion),
+      criterion_id:
+        typeof score.criterion_id === 'string' && score.criterion_id.trim()
+          ? score.criterion_id
+          : undefined,
+      score: Number.isFinite(Number(score.score)) ? Number(score.score) : 0,
+      notes: score.notes == null ? undefined : formatListEntry(score.notes),
+    })),
+    jd_analysis: jd
+      ? {
+          overall_fit_score: Number.isFinite(Number(jd.overall_fit_score))
+            ? Number(jd.overall_fit_score)
+            : 0,
+          matched_requirements: normalizeStringList(jd.matched_requirements as unknown[]),
+          gaps: normalizeStringList(jd.gaps as unknown[]),
+          summary: formatListEntry(jd.summary),
+        }
+      : undefined,
+    panel_notes: data.panel_notes == null ? undefined : formatListEntry(data.panel_notes),
   }
 }

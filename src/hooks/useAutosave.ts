@@ -7,18 +7,27 @@ export function useAutosave<T>(
   saveFn: (value: T) => Promise<void>,
   enabled: boolean,
   delayMs = 1500,
+  scopeKey = 'default',
 ) {
   const [status, setStatus] = useState<AutosaveStatus>('idle')
-  const saveFnRef = useRef(saveFn)
-  saveFnRef.current = saveFn
   const serialized = JSON.stringify(value)
   const isFirst = useRef(true)
+  const scopeRef = useRef(scopeKey)
 
   useEffect(() => {
-    if (!enabled) {
+    if (scopeRef.current !== scopeKey) {
+      scopeRef.current = scopeKey
+      isFirst.current = true
       setStatus('idle')
       return
     }
+
+    if (!enabled) {
+      isFirst.current = true
+      setStatus('idle')
+      return
+    }
+
     if (isFirst.current) {
       isFirst.current = false
       return
@@ -28,7 +37,7 @@ export function useAutosave<T>(
     const timer = setTimeout(async () => {
       setStatus('saving')
       try {
-        await saveFnRef.current(value)
+        await saveFn(value)
         setStatus('saved')
       } catch {
         setStatus('error')
@@ -36,7 +45,7 @@ export function useAutosave<T>(
     }, delayMs)
 
     return () => clearTimeout(timer)
-  }, [serialized, enabled, delayMs, value])
+  }, [serialized, enabled, delayMs, value, saveFn, scopeKey])
 
   return status
 }
