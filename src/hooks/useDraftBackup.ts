@@ -15,7 +15,7 @@ interface DraftBackupEnvelope<T> extends DraftBackup<T> {
 
 function isDraftBackupEnvelope<T>(value: unknown): value is DraftBackupEnvelope<T> {
   return (
-    Boolean(value) &&
+    value !== null &&
     typeof value === 'object' &&
     (value as { version?: unknown }).version === VERSION &&
     'data' in value
