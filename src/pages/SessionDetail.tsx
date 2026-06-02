@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { ArrowLeft, Loader2, Sparkles, Save } from 'lucide-react'
 import { AutosaveIndicator } from '@/components/ui/AutosaveIndicator'
@@ -31,6 +31,7 @@ import {
 } from '@/lib/api'
 import { normalizeInterviewOutput, normalizeMeetingOutput } from '@/lib/normalizeOutput'
 import type { InterviewFeedbackOutput, MeetingMinutesOutput } from '@/lib/types'
+import type { DraftBackup } from '@/hooks/useDraftBackup'
 
 const emptyMeeting = (): MeetingMinutesOutput => ({
   executive_summary: '',
@@ -57,9 +58,24 @@ const emptyInterview = (): InterviewFeedbackOutput => ({
   follow_up_questions: [],
 })
 
+function shouldUseDraftBackup(
+  draft: DraftBackup<MeetingMinutesOutput | InterviewFeedbackOutput> | null,
+  rawOutput: Record<string, unknown> | null | undefined,
+  serverOutputUpdatedAt: string | null,
+) {
+  if (!draft) return false
+  if (!rawOutput) return true
+  return Boolean(
+    draft.baseOutputUpdatedAt &&
+      serverOutputUpdatedAt &&
+      draft.baseOutputUpdatedAt === serverOutputUpdatedAt,
+  )
+}
+
 export function SessionDetail() {
   const { id } = useParams<{ id: string }>()
   const api = useApi()
+  const loadSeq = useRef(0)
   const [session, setSession] = useState<SessionWithOutput | null>(null)
   const [output, setOutput] = useState<MeetingMinutesOutput | InterviewFeedbackOutput | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -76,7 +92,9 @@ export function SessionDetail() {
 
   const load = useCallback(async () => {
     if (!id) return
+    const requestSeq = ++loadSeq.current
     const data = await fetchSessionFull(api, id)
+    if (requestSeq !== loadSeq.current) return
     setSession(data)
     if (data.interview_meta) {
       const m = data.interview_meta
@@ -91,11 +109,16 @@ export function SessionDetail() {
     }
     const draft = id ? loadDraftBackup<MeetingMinutesOutput | InterviewFeedbackOutput>(id) : null
     const raw = data.output?.edited_json ?? data.output?.ai_json
-    if (draft && data.status === 'ready') {
+    const serverOutputUpdatedAt = data.output?.updated_at ?? null
+    const useDraft = data.status === 'ready' && shouldUseDraftBackup(draft, raw, serverOutputUpdatedAt)
+    if (draft && raw && !useDraft) {
+      clearDraftBackup(id)
+    }
+    if (useDraft && draft) {
       setOutput(
         data.mode === 'meeting'
-          ? normalizeMeetingOutput(draft as MeetingMinutesOutput)
-          : normalizeInterviewOutput(draft as InterviewFeedbackOutput),
+          ? normalizeMeetingOutput(draft.data as MeetingMinutesOutput)
+          : normalizeInterviewOutput(draft.data as InterviewFeedbackOutput),
       )
     } else if (raw && data.mode === 'meeting') {
       setOutput(
@@ -135,17 +158,27 @@ export function SessionDetail() {
     )
   }, [load])
 
-  const hasOutput = output !== null && session?.status === 'ready'
+  const isActiveSession = Boolean(session && session.id === id)
+  const hasOutput = isActiveSession && output !== null && session?.status === 'ready'
 
   const saveOutput = useCallback(
     async (data: MeetingMinutesOutput | InterviewFeedbackOutput) => {
-      if (!id) return
+      const sessionId = id
+      const mode = session?.mode
+      if (!sessionId || !mode) return
       const normalized =
-        session?.mode === 'interview'
+        mode === 'interview'
           ? normalizeInterviewOutput(data as InterviewFeedbackOutput)
           : normalizeMeetingOutput(data as MeetingMinutesOutput)
-      await updateSessionOutput(api, id, normalized as unknown as Record<string, unknown>)
-      if (id) clearDraftBackup(id)
+      const savedOutput = await updateSessionOutput(
+        api,
+        sessionId,
+        normalized as unknown as Record<string, unknown>,
+      )
+      setSession((current) =>
+        current?.id === sessionId ? { ...current, output: savedOutput } : current,
+      )
+      clearDraftBackup(sessionId)
     },
     [api, id, session?.mode],
   )
@@ -154,9 +187,11 @@ export function SessionDetail() {
     output as MeetingMinutesOutput | InterviewFeedbackOutput,
     saveOutput,
     Boolean(hasOutput && output),
+    1500,
+    id ?? 'session-detail',
   )
 
-  useDraftBackup(id, output, Boolean(hasOutput && output))
+  useDraftBackup(id, output, Boolean(hasOutput && output), session?.output?.updated_at ?? null)
 
   const titleDisplay = useMemo(() => session?.title ?? '', [session?.title])
 
@@ -216,7 +251,7 @@ export function SessionDetail() {
     }
   }
 
-  if (error && !session) {
+  if (error && !isActiveSession) {
     return (
       <div className="mx-auto max-w-3xl">
         <InlineAlert variant="error">{error}</InlineAlert>
@@ -227,7 +262,7 @@ export function SessionDetail() {
     )
   }
 
-  if (!session) {
+  if (!session || !isActiveSession) {
     return (
       <div className="mx-auto max-w-3xl space-y-4">
         <div className="h-8 w-48 animate-pulse rounded-lg bg-white/10" />
