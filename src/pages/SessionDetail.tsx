@@ -153,16 +153,13 @@ export function SessionDetail() {
   }, [api, id])
 
   useEffect(() => {
-    setSession(null)
-    setOutput(null)
-    setError(null)
-    setSaveOk(false)
     load().catch((err: unknown) =>
       setError(getApiErrorMessage(err, 'Session not found or could not be loaded.')),
     )
   }, [load])
 
-  const hasOutput = output !== null && session?.status === 'ready'
+  const isActiveSession = Boolean(session && session.id === id)
+  const hasOutput = isActiveSession && output !== null && session?.status === 'ready'
 
   const saveOutput = useCallback(
     async (data: MeetingMinutesOutput | InterviewFeedbackOutput) => {
@@ -254,7 +251,7 @@ export function SessionDetail() {
     }
   }
 
-  if (error && !session) {
+  if (error && !isActiveSession) {
     return (
       <div className="mx-auto max-w-3xl">
         <InlineAlert variant="error">{error}</InlineAlert>
@@ -265,7 +262,7 @@ export function SessionDetail() {
     )
   }
 
-  if (!session) {
+  if (!session || !isActiveSession) {
     return (
       <div className="mx-auto max-w-3xl space-y-4">
         <div className="h-8 w-48 animate-pulse rounded-lg bg-white/10" />

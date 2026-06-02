@@ -15,16 +15,16 @@ export function useAutosave<T>(
   const scopeRef = useRef(scopeKey)
 
   useEffect(() => {
-    if (scopeRef.current !== scopeKey) {
+    if (!enabled) {
       scopeRef.current = scopeKey
       isFirst.current = true
       setStatus('idle')
       return
     }
 
-    if (!enabled) {
+    if (scopeRef.current !== scopeKey) {
+      scopeRef.current = scopeKey
       isFirst.current = true
-      setStatus('idle')
       return
     }
 
