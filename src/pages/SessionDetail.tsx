@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { ArrowLeft, Loader2, Sparkles, Save } from 'lucide-react'
 import { AutosaveIndicator } from '@/components/ui/AutosaveIndicator'
@@ -32,6 +32,8 @@ import {
 import { normalizeInterviewOutput, normalizeMeetingOutput } from '@/lib/normalizeOutput'
 import type { InterviewFeedbackOutput, MeetingMinutesOutput } from '@/lib/types'
 
+type SessionOutput = MeetingMinutesOutput | InterviewFeedbackOutput
+
 const emptyMeeting = (): MeetingMinutesOutput => ({
   executive_summary: '',
   discussion_points: [],
@@ -57,6 +59,34 @@ const emptyInterview = (): InterviewFeedbackOutput => ({
   follow_up_questions: [],
 })
 
+function normalizeOutputForMode(
+  mode: 'meeting' | 'interview',
+  data: SessionOutput,
+): SessionOutput {
+  return mode === 'interview'
+    ? normalizeInterviewOutput(data as InterviewFeedbackOutput)
+    : normalizeMeetingOutput(data as MeetingMinutesOutput)
+}
+
+function readOutputFromRecord(
+  mode: 'meeting' | 'interview',
+  raw: Record<string, unknown> | null | undefined,
+): SessionOutput | null {
+  if (!raw) return null
+  return normalizeOutputForMode(
+    mode,
+    mode === 'interview'
+      ? ({
+          ...emptyInterview(),
+          ...(raw as unknown as InterviewFeedbackOutput),
+        } as InterviewFeedbackOutput)
+      : ({
+          ...emptyMeeting(),
+          ...(raw as unknown as MeetingMinutesOutput),
+        } as MeetingMinutesOutput),
+  )
+}
+
 export function SessionDetail() {
   const { id } = useParams<{ id: string }>()
   const api = useApi()
@@ -73,10 +103,23 @@ export function SessionDetail() {
   const [interviewOptions, setInterviewOptions] = useState<InterviewProcessOptions>(
     defaultInterviewOptions,
   )
+  const [persistedOutputSerialized, setPersistedOutputSerialized] = useState<string | null>(null)
+  const outputRef = useRef<SessionOutput | null>(null)
+  const sessionRef = useRef<SessionWithOutput | null>(null)
+  const processingRef = useRef(false)
+  const saveChainRef = useRef<Promise<void>>(Promise.resolve())
 
-  const load = useCallback(async () => {
-    if (!id) return
-    const data = await fetchSessionFull(api, id)
+  useEffect(() => {
+    outputRef.current = output
+  }, [output])
+
+  useEffect(() => {
+    sessionRef.current = session
+  }, [session])
+
+  const load = useCallback(async (sessionId: string, isActive: () => boolean) => {
+    const data = await fetchSessionFull(api, sessionId)
+    if (!isActive()) return
     setSession(data)
     if (data.interview_meta) {
       const m = data.interview_meta
@@ -89,28 +132,17 @@ export function SessionDetail() {
         panel_transcripts: null,
       })
     }
-    const draft = id ? loadDraftBackup<MeetingMinutesOutput | InterviewFeedbackOutput>(id) : null
     const raw = data.output?.edited_json ?? data.output?.ai_json
+    const serverOutput = readOutputFromRecord(data.mode, raw)
+    const serverSerialized = serverOutput ? JSON.stringify(serverOutput) : null
+    const baseUpdatedAt = data.output?.updated_at ?? data.updated_at ?? null
+    const draft = loadDraftBackup<SessionOutput>(sessionId, baseUpdatedAt)
+    setPersistedOutputSerialized(serverSerialized)
+
     if (draft && data.status === 'ready') {
-      setOutput(
-        data.mode === 'meeting'
-          ? normalizeMeetingOutput(draft as MeetingMinutesOutput)
-          : normalizeInterviewOutput(draft as InterviewFeedbackOutput),
-      )
-    } else if (raw && data.mode === 'meeting') {
-      setOutput(
-        normalizeMeetingOutput({
-          ...emptyMeeting(),
-          ...(raw as unknown as MeetingMinutesOutput),
-        }),
-      )
-    } else if (raw && data.mode === 'interview') {
-      setOutput(
-        normalizeInterviewOutput({
-          ...emptyInterview(),
-          ...(raw as unknown as InterviewFeedbackOutput),
-        }),
-      )
+      setOutput(normalizeOutputForMode(data.mode, draft))
+    } else if (serverOutput) {
+      setOutput(serverOutput)
     } else {
       setOutput(null)
     }
@@ -118,7 +150,7 @@ export function SessionDetail() {
     if (data.status === 'processing') {
       setAiStatus('processing')
     } else if (data.status === 'ready' && data.output) {
-      const meta = id ? loadAiMeta(id) : null
+      const meta = loadAiMeta(sessionId)
       setAiStatus('done')
       setAiProvider(meta?.provider ?? null)
       setAiTruncated(meta?.truncated ?? false)
@@ -127,76 +159,137 @@ export function SessionDetail() {
     } else {
       setAiStatus('idle')
     }
-  }, [api, id])
+  }, [api])
 
   useEffect(() => {
-    load().catch((err: unknown) =>
-      setError(getApiErrorMessage(err, 'Session not found or could not be loaded.')),
-    )
-  }, [load])
+    if (!id) return
+    let active = true
+    setSession(null)
+    setOutput(null)
+    setPersistedOutputSerialized(null)
+    setError(null)
+    load(id, () => active).catch((err: unknown) => {
+      if (active) {
+        setError(getApiErrorMessage(err, 'Session not found or could not be loaded.'))
+      }
+    })
+    return () => {
+      active = false
+    }
+  }, [id, load])
 
-  const hasOutput = output !== null && session?.status === 'ready'
+  const isCurrentSession = Boolean(id && session?.id === id)
+  const hasOutput = isCurrentSession && output !== null && session?.status === 'ready'
+  const outputSerialized = useMemo(() => (output ? JSON.stringify(output) : null), [output])
+  const outputBaseUpdatedAt = session?.output?.updated_at ?? session?.updated_at ?? null
+  const hasUnsavedLocalOutput =
+    Boolean(hasOutput && outputSerialized) && outputSerialized !== persistedOutputSerialized
+
+  const queueOutputSave = useCallback(
+    (
+      sessionId: string,
+      mode: 'meeting' | 'interview',
+      data: SessionOutput,
+      options?: { allowDuringProcessing?: boolean; forceClearDraft?: boolean },
+    ) => {
+      const normalized = normalizeOutputForMode(mode, data)
+      const serializedToSave = JSON.stringify(normalized)
+      const write = async () => {
+        if (sessionRef.current?.id !== sessionId) return
+        if (!options?.allowDuringProcessing && processingRef.current) return
+
+        const saved = await updateSessionOutput(
+          api,
+          sessionId,
+          normalized as unknown as Record<string, unknown>,
+        )
+        setSession((current) =>
+          current?.id === sessionId ? { ...current, output: saved } : current,
+        )
+        setPersistedOutputSerialized(serializedToSave)
+
+        const currentOutput = outputRef.current
+        const currentSerialized = currentOutput
+          ? JSON.stringify(normalizeOutputForMode(mode, currentOutput))
+          : null
+        if (options?.forceClearDraft || currentSerialized === serializedToSave) {
+          clearDraftBackup(sessionId)
+        }
+      }
+
+      const next = saveChainRef.current.catch(() => undefined).then(write)
+      saveChainRef.current = next.catch(() => undefined)
+      return next
+    },
+    [api],
+  )
 
   const saveOutput = useCallback(
-    async (data: MeetingMinutesOutput | InterviewFeedbackOutput) => {
+    async (data: SessionOutput) => {
       if (!id) return
-      const normalized =
-        session?.mode === 'interview'
-          ? normalizeInterviewOutput(data as InterviewFeedbackOutput)
-          : normalizeMeetingOutput(data as MeetingMinutesOutput)
-      await updateSessionOutput(api, id, normalized as unknown as Record<string, unknown>)
-      if (id) clearDraftBackup(id)
+      const current = sessionRef.current
+      if (!current || current.id !== id || processingRef.current) return
+      await queueOutputSave(id, current.mode, data)
     },
-    [api, id, session?.mode],
+    [id, queueOutputSave],
   )
 
   const autosaveStatus = useAutosave(
-    output as MeetingMinutesOutput | InterviewFeedbackOutput,
+    output as SessionOutput,
     saveOutput,
-    Boolean(hasOutput && output),
+    Boolean(hasOutput && output && !processing),
   )
 
-  useDraftBackup(id, output, Boolean(hasOutput && output))
+  useDraftBackup(
+    id,
+    output,
+    Boolean(hasUnsavedLocalOutput && output && !processing),
+    outputBaseUpdatedAt,
+  )
 
   const titleDisplay = useMemo(() => session?.title ?? '', [session?.title])
 
   async function handleProcess() {
-    if (!id) return
+    if (!id || !session || !isCurrentSession) return
+    const sessionId = id
+    const mode = session.mode
+    processingRef.current = true
     setProcessing(true)
     setAiStatus('processing')
     setAiProvider(null)
     setError(null)
     try {
+      await saveChainRef.current.catch(() => undefined)
       const result = await processSession(
         api,
-        id,
-        session?.mode === 'interview' ? interviewOptions : null,
+        sessionId,
+        mode === 'interview' ? interviewOptions : null,
       )
-      setSession({ ...session!, ...result.session, output: result.output })
+      if (sessionRef.current?.id !== sessionId) return
+      setSession({ ...session, ...result.session, output: result.output })
       setAiStatus('done')
       setAiProvider(result.provider)
       setAiTruncated(result.truncated)
-      saveAiMeta(id, {
+      saveAiMeta(sessionId, {
         provider: result.provider,
         truncated: result.truncated,
         completedAt: new Date().toISOString(),
       })
-      const raw = result.output.edited_json ?? result.output.ai_json
-      if (session?.mode === 'interview' || result.session.mode === 'interview') {
-        setOutput(
-          normalizeInterviewOutput(
-            (raw as unknown as InterviewFeedbackOutput) || emptyInterview(),
-          ),
-        )
-      } else {
-        setOutput(
-          normalizeMeetingOutput((raw as unknown as MeetingMinutesOutput) || emptyMeeting()),
-        )
-      }
+      const resultMode = result.session.mode
+      const raw = result.output.ai_json ?? result.output.edited_json
+      const generatedOutput =
+        readOutputFromRecord(resultMode, raw) ??
+        (resultMode === 'interview' ? emptyInterview() : emptyMeeting())
+      setOutput(generatedOutput)
+      await queueOutputSave(sessionId, resultMode, generatedOutput, {
+        allowDuringProcessing: true,
+        forceClearDraft: true,
+      })
     } catch (err: unknown) {
       setAiStatus('error')
       setError(getApiErrorMessage(err, 'AI processing failed. Try again in a moment.'))
     } finally {
+      processingRef.current = false
       setProcessing(false)
     }
   }
@@ -285,7 +378,7 @@ export function SessionDetail() {
             <button
               type="button"
               onClick={handleSave}
-              disabled={saving}
+              disabled={saving || processing}
               className="inline-flex items-center gap-2 rounded-lg border border-indigo-500/50 bg-indigo-500/10 px-4 py-2 text-sm font-medium text-indigo-200"
             >
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
