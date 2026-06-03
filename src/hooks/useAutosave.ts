@@ -75,7 +75,6 @@ export function useAutosave<T>(
       generationRef.current += 1
       isFirst.current = true
       pendingRef.current = false
-      setStatus('idle')
       return
     }
     if (isFirst.current) {

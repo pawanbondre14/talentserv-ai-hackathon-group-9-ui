@@ -164,17 +164,21 @@ export function SessionDetail() {
   useEffect(() => {
     if (!id) return
     let active = true
-    setSession(null)
-    setOutput(null)
-    setPersistedOutputSerialized(null)
-    setError(null)
-    load(id, () => active).catch((err: unknown) => {
-      if (active) {
-        setError(getApiErrorMessage(err, 'Session not found or could not be loaded.'))
-      }
-    })
+    const timer = window.setTimeout(() => {
+      if (!active) return
+      setSession(null)
+      setOutput(null)
+      setPersistedOutputSerialized(null)
+      setError(null)
+      load(id, () => active).catch((err: unknown) => {
+        if (active) {
+          setError(getApiErrorMessage(err, 'Session not found or could not be loaded.'))
+        }
+      })
+    }, 0)
     return () => {
       active = false
+      window.clearTimeout(timer)
     }
   }, [id, load])
 
