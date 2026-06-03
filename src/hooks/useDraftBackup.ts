@@ -1,24 +1,57 @@
 import { useEffect } from 'react'
 
 const PREFIX = 'meetingfeed-draft:'
+const VERSION = 1
 
-export function useDraftBackup(sessionId: string | undefined, data: unknown, enabled: boolean) {
-  const serialized = JSON.stringify(data)
+interface DraftBackup<T> {
+  version: typeof VERSION
+  baseUpdatedAt: string | null
+  data: T
+}
+
+function storageKey(sessionId: string) {
+  return `${PREFIX}${sessionId}`
+}
+
+export function useDraftBackup(
+  sessionId: string | undefined,
+  data: unknown,
+  enabled: boolean,
+  baseUpdatedAt: string | null,
+) {
+  const serialized = JSON.stringify({
+    version: VERSION,
+    baseUpdatedAt,
+    data,
+  } satisfies DraftBackup<unknown>)
 
   useEffect(() => {
     if (!sessionId || !enabled) return
     try {
-      sessionStorage.setItem(`${PREFIX}${sessionId}`, serialized)
+      sessionStorage.setItem(storageKey(sessionId), serialized)
     } catch {
       /* quota */
     }
   }, [sessionId, serialized, enabled])
 }
 
-export function loadDraftBackup<T>(sessionId: string): T | null {
+export function loadDraftBackup<T>(sessionId: string, baseUpdatedAt: string | null): T | null {
   try {
-    const raw = sessionStorage.getItem(`${PREFIX}${sessionId}`)
-    return raw ? (JSON.parse(raw) as T) : null
+    const key = storageKey(sessionId)
+    const raw = sessionStorage.getItem(key)
+    if (!raw) return null
+
+    const parsed = JSON.parse(raw) as Partial<DraftBackup<T>>
+    if (
+      parsed.version !== VERSION ||
+      !('data' in parsed) ||
+      parsed.baseUpdatedAt !== baseUpdatedAt
+    ) {
+      sessionStorage.removeItem(key)
+      return null
+    }
+
+    return parsed.data ?? null
   } catch {
     return null
   }
@@ -26,7 +59,7 @@ export function loadDraftBackup<T>(sessionId: string): T | null {
 
 export function clearDraftBackup(sessionId: string) {
   try {
-    sessionStorage.removeItem(`${PREFIX}${sessionId}`)
+    sessionStorage.removeItem(storageKey(sessionId))
   } catch {
     /* ignore */
   }
