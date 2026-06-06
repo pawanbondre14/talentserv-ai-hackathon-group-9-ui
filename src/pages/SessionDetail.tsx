@@ -1,10 +1,15 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { ArrowLeft, Loader2, Sparkles, Save } from 'lucide-react'
 import { AutosaveIndicator } from '@/components/ui/AutosaveIndicator'
 import { Card } from '@/components/ui/Card'
 import { useAutosave } from '@/hooks/useAutosave'
-import { clearDraftBackup, loadDraftBackup, useDraftBackup } from '@/hooks/useDraftBackup'
+import {
+  clearDraftBackup,
+  isDraftNewerThanServer,
+  loadDraftBackup,
+  useDraftBackup,
+} from '@/hooks/useDraftBackup'
 import {
   AiStatusPanel,
   loadAiMeta,
@@ -73,10 +78,19 @@ export function SessionDetail() {
   const [interviewOptions, setInterviewOptions] = useState<InterviewProcessOptions>(
     defaultInterviewOptions,
   )
+  const latestOutputSignature = useRef<string | null>(null)
+  const currentRouteId = useRef<string | undefined>(id)
+
+  useEffect(() => {
+    currentRouteId.current = id
+  }, [id])
 
   const load = useCallback(async () => {
     if (!id) return
+    const requestedId = id
     const data = await fetchSessionFull(api, id)
+    if (currentRouteId.current !== requestedId) return
+
     setSession(data)
     if (data.interview_meta) {
       const m = data.interview_meta
@@ -88,14 +102,20 @@ export function SessionDetail() {
         candidate_email: m.candidate_email,
         panel_transcripts: null,
       })
+    } else {
+      setInterviewOptions(defaultInterviewOptions)
     }
     const draft = id ? loadDraftBackup<MeetingMinutesOutput | InterviewFeedbackOutput>(id) : null
     const raw = data.output?.edited_json ?? data.output?.ai_json
-    if (draft && data.status === 'ready') {
+    if (
+      draft &&
+      data.status === 'ready' &&
+      isDraftNewerThanServer(draft, data.output?.updated_at)
+    ) {
       setOutput(
         data.mode === 'meeting'
-          ? normalizeMeetingOutput(draft as MeetingMinutesOutput)
-          : normalizeInterviewOutput(draft as InterviewFeedbackOutput),
+          ? normalizeMeetingOutput(draft.payload as MeetingMinutesOutput)
+          : normalizeInterviewOutput(draft.payload as InterviewFeedbackOutput),
       )
     } else if (raw && data.mode === 'meeting') {
       setOutput(
@@ -130,30 +150,46 @@ export function SessionDetail() {
   }, [api, id])
 
   useEffect(() => {
-    load().catch((err: unknown) =>
-      setError(getApiErrorMessage(err, 'Session not found or could not be loaded.')),
-    )
-  }, [load])
+    const timeout = window.setTimeout(() => {
+      load().catch((err: unknown) =>
+        currentRouteId.current === id &&
+        setError(getApiErrorMessage(err, 'Session not found or could not be loaded.')),
+      )
+    }, 0)
+    return () => window.clearTimeout(timeout)
+  }, [id, load])
 
-  const hasOutput = output !== null && session?.status === 'ready'
+  const isCurrentSession = Boolean(id && session?.id === id)
+  const hasOutput = isCurrentSession && output !== null && session?.status === 'ready'
+  const normalizedOutputSignature = useMemo(
+    () => (output ? JSON.stringify(output) : null),
+    [output],
+  )
+
+  useEffect(() => {
+    latestOutputSignature.current = normalizedOutputSignature
+  }, [normalizedOutputSignature])
 
   const saveOutput = useCallback(
     async (data: MeetingMinutesOutput | InterviewFeedbackOutput) => {
-      if (!id) return
+      if (!id || session?.id !== id) return
       const normalized =
         session?.mode === 'interview'
           ? normalizeInterviewOutput(data as InterviewFeedbackOutput)
           : normalizeMeetingOutput(data as MeetingMinutesOutput)
+      const savedSignature = JSON.stringify(normalized)
       await updateSessionOutput(api, id, normalized as unknown as Record<string, unknown>)
-      if (id) clearDraftBackup(id)
+      if (currentRouteId.current === id && latestOutputSignature.current === savedSignature) {
+        clearDraftBackup(id)
+      }
     },
-    [api, id, session?.mode],
+    [api, id, session?.id, session?.mode],
   )
 
-  const autosaveStatus = useAutosave(
+  const autosave = useAutosave(
     output as MeetingMinutesOutput | InterviewFeedbackOutput,
     saveOutput,
-    Boolean(hasOutput && output),
+    Boolean(hasOutput && output && !processing),
   )
 
   useDraftBackup(id, output, Boolean(hasOutput && output))
@@ -206,7 +242,7 @@ export function SessionDetail() {
     setSaving(true)
     setSaveOk(false)
     try {
-      await saveOutput(output)
+      await autosave.saveNow(output as MeetingMinutesOutput | InterviewFeedbackOutput)
       setSaveOk(true)
       setTimeout(() => setSaveOk(false), 2000)
     } catch (err: unknown) {
@@ -227,7 +263,7 @@ export function SessionDetail() {
     )
   }
 
-  if (!session) {
+  if (!session || !isCurrentSession) {
     return (
       <div className="mx-auto max-w-3xl space-y-4">
         <div className="h-8 w-48 animate-pulse rounded-lg bg-white/10" />
@@ -255,7 +291,7 @@ export function SessionDetail() {
           </p>
           {hasOutput && (
             <div className="mt-2">
-              <AutosaveIndicator status={autosaveStatus} />
+              <AutosaveIndicator status={autosave.status} />
             </div>
           )}
           {(processing || aiStatus !== 'idle') && (
