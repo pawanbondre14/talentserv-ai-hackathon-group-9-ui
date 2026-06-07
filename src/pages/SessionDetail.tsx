@@ -89,7 +89,10 @@ export function SessionDetail() {
         panel_transcripts: null,
       })
     }
-    const draft = id ? loadDraftBackup<MeetingMinutesOutput | InterviewFeedbackOutput>(id) : null
+    const outputVersion = data.output?.updated_at ?? data.updated_at
+    const draft = id
+      ? loadDraftBackup<MeetingMinutesOutput | InterviewFeedbackOutput>(id, outputVersion)
+      : null
     const raw = data.output?.edited_json ?? data.output?.ai_json
     if (draft && data.status === 'ready') {
       setOutput(
@@ -144,7 +147,12 @@ export function SessionDetail() {
         session?.mode === 'interview'
           ? normalizeInterviewOutput(data as InterviewFeedbackOutput)
           : normalizeMeetingOutput(data as MeetingMinutesOutput)
-      await updateSessionOutput(api, id, normalized as unknown as Record<string, unknown>)
+      const updatedOutput = await updateSessionOutput(
+        api,
+        id,
+        normalized as unknown as Record<string, unknown>,
+      )
+      setSession((current) => (current ? { ...current, output: updatedOutput } : current))
       if (id) clearDraftBackup(id)
     },
     [api, id, session?.mode],
@@ -156,7 +164,12 @@ export function SessionDetail() {
     Boolean(hasOutput && output),
   )
 
-  useDraftBackup(id, output, Boolean(hasOutput && output))
+  useDraftBackup(
+    id,
+    output,
+    Boolean(hasOutput && output),
+    session?.output?.updated_at ?? session?.updated_at,
+  )
 
   const titleDisplay = useMemo(() => session?.title ?? '', [session?.title])
 
