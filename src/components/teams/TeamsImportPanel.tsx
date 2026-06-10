@@ -1,5 +1,5 @@
 import { useAuth } from '@clerk/clerk-react'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   ChevronRight,
@@ -52,7 +52,8 @@ export function TeamsImportPanel({
   const [folderStack, setFolderStack] = useState<FolderStackItem[]>([
     { id: 'root', name: 'OneDrive' },
   ])
-  const [integrationMode, setIntegrationMode] = useState('mock')
+  const [integrationMode, setIntegrationMode] = useState<'mock' | 'live'>('mock')
+  const [loadedFolderId, setLoadedFolderId] = useState<string | null>(null)
   const [msConnected, setMsConnected] = useState(false)
   const [azureConfigured, setAzureConfigured] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -60,6 +61,7 @@ export function TeamsImportPanel({
   const [error, setError] = useState<string | null>(initialError)
   const [notice, setNotice] = useState<string | null>(initialNotice)
   const [warning, setWarning] = useState<string | null>(null)
+  const latestFolderRequest = useRef(0)
 
   const currentFolder = folderStack[folderStack.length - 1]
 
@@ -73,6 +75,8 @@ export function TeamsImportPanel({
 
   const loadFolder = useCallback(
     async (folderId: string) => {
+      const requestId = latestFolderRequest.current + 1
+      latestFolderRequest.current = requestId
       setLoading(true)
       setError(null)
       setWarning(null)
@@ -81,24 +85,30 @@ export function TeamsImportPanel({
           getMicrosoftStatus(api),
           browseOneDriveFolder(api, folderId),
         ])
+        if (latestFolderRequest.current !== requestId) return
+        const nextIntegrationMode = browse.integration_mode === 'live' ? 'live' : 'mock'
         setMsConnected(status.connected)
         setAzureConfigured(status.azure_configured)
-        setIntegrationMode(browse.integration_mode)
+        setIntegrationMode(nextIntegrationMode)
+        setLoadedFolderId(folderId)
         setItems(browse.items)
 
         if (
           status.connected &&
           status.azure_configured &&
-          browse.integration_mode === 'mock'
+          nextIntegrationMode === 'mock'
         ) {
           setWarning(
             'Could not load your OneDrive. Showing demo folders — try disconnecting and reconnecting Microsoft.',
           )
         }
       } catch (err: unknown) {
+        if (latestFolderRequest.current !== requestId) return
         setError(getApiErrorMessage(err, 'Could not load OneDrive folder.'))
       } finally {
-        setLoading(false)
+        if (latestFolderRequest.current === requestId) {
+          setLoading(false)
+        }
       }
     },
     [api],
@@ -117,10 +127,11 @@ export function TeamsImportPanel({
   }
 
   function openRecordingsShortcut() {
+    if (loading) return
     setFolderStack([
       { id: 'root', name: 'OneDrive' },
       {
-        id: integrationMode === 'live' ? 'recordings' : MOCK_RECORDINGS_FOLDER_ID,
+        id: msConnected && integrationMode === 'live' ? 'recordings' : MOCK_RECORDINGS_FOLDER_ID,
         name: 'Recordings',
       },
     ])
@@ -160,6 +171,10 @@ export function TeamsImportPanel({
   }
 
   async function handleImport(item: OneDriveBrowseItem) {
+    if (loading || loadedFolderId !== currentFolder.id) {
+      setError('Folder is still loading. Please wait before importing.')
+      return
+    }
     setImportingId(item.id)
     setError(null)
     setNotice(null)
@@ -269,7 +284,7 @@ export function TeamsImportPanel({
             </span>
           ))}
         </nav>
-        {currentFolder.id === 'root' && !msConnected && (
+        {currentFolder.id === 'root' && !msConnected && !loading && (
           <button
             type="button"
             onClick={openRecordingsShortcut}
@@ -315,7 +330,7 @@ export function TeamsImportPanel({
             {item.kind === 'folder' ? (
               <button
                 type="button"
-                disabled={Boolean(importingId)}
+                disabled={Boolean(importingId) || loading || loadedFolderId !== currentFolder.id}
                 onClick={() => openFolder(item)}
                 className="shrink-0 rounded-lg border border-[var(--color-surface-border)] px-3 py-1.5 text-xs font-semibold text-slate-200 hover:text-white disabled:opacity-50"
               >
@@ -324,7 +339,7 @@ export function TeamsImportPanel({
             ) : (
               <button
                 type="button"
-                disabled={Boolean(importingId)}
+                disabled={Boolean(importingId) || loading || loadedFolderId !== currentFolder.id}
                 onClick={() => handleImport(item)}
                 className="shrink-0 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-500 disabled:opacity-50"
               >
