@@ -26,29 +26,44 @@ export function normalizeStringList(items: unknown[] | undefined | null): string
   return items.map(formatListEntry).filter((s) => s.length > 0)
 }
 
+function hasContent(...values: string[]): boolean {
+  return values.some((value) => value.trim().length > 0)
+}
+
 export function normalizeMeetingOutput(data: MeetingMinutesOutput): MeetingMinutesOutput {
   return {
     ...data,
     executive_summary:
       typeof data.executive_summary === 'string' ? data.executive_summary : formatListEntry(data.executive_summary),
-    discussion_points: (data.discussion_points || []).map((d) => ({
-      topic: typeof d.topic === 'string' ? d.topic : formatListEntry(d.topic),
-      summary: typeof d.summary === 'string' ? d.summary : formatListEntry(d.summary),
-      participants: Array.isArray(d.participants)
-        ? d.participants.map((p) => (typeof p === 'string' ? p : formatListEntry(p)))
-        : [],
-    })),
-    decisions: (data.decisions || []).map((d) => ({
-      decision: typeof d.decision === 'string' ? d.decision : formatListEntry(d.decision),
-      rationale: typeof d.rationale === 'string' ? d.rationale : formatListEntry(d.rationale),
-      owner: typeof d.owner === 'string' ? d.owner : formatListEntry(d.owner),
-    })),
-    action_items: (data.action_items || []).map((a) => ({
-      task: typeof a.task === 'string' ? a.task : formatListEntry(a.task),
-      owner: typeof a.owner === 'string' ? a.owner : formatListEntry(a.owner),
-      due_date: typeof a.due_date === 'string' ? a.due_date : formatListEntry(a.due_date),
-      priority: typeof a.priority === 'string' ? a.priority : formatListEntry(a.priority),
-    })),
+    discussion_points: (data.discussion_points || [])
+      .map((d) => {
+        const participants = Array.isArray(d.participants)
+          ? d.participants
+              .map((p) => (typeof p === 'string' ? p : formatListEntry(p)))
+              .filter((p) => p.trim().length > 0)
+          : []
+        return {
+          topic: typeof d.topic === 'string' ? d.topic : formatListEntry(d.topic),
+          summary: typeof d.summary === 'string' ? d.summary : formatListEntry(d.summary),
+          participants,
+        }
+      })
+      .filter((d) => hasContent(d.topic, d.summary, ...d.participants)),
+    decisions: (data.decisions || [])
+      .map((d) => ({
+        decision: typeof d.decision === 'string' ? d.decision : formatListEntry(d.decision),
+        rationale: typeof d.rationale === 'string' ? d.rationale : formatListEntry(d.rationale),
+        owner: typeof d.owner === 'string' ? d.owner : formatListEntry(d.owner),
+      }))
+      .filter((d) => hasContent(d.decision, d.rationale, d.owner)),
+    action_items: (data.action_items || [])
+      .map((a) => ({
+        task: typeof a.task === 'string' ? a.task : formatListEntry(a.task),
+        owner: typeof a.owner === 'string' ? a.owner : formatListEntry(a.owner),
+        due_date: typeof a.due_date === 'string' ? a.due_date : formatListEntry(a.due_date),
+        priority: typeof a.priority === 'string' ? a.priority : formatListEntry(a.priority),
+      }))
+      .filter((a) => hasContent(a.task, a.owner, a.due_date, a.priority)),
     risks: normalizeStringList(data.risks as unknown[]),
     follow_ups: normalizeStringList(data.follow_ups as unknown[]),
   }
